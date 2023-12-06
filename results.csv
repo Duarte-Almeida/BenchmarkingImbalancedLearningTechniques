@@ -1,0 +1,4 @@
+name,Precision,Recall,F1 score,False Positive Rate,False Negative Rate,G-mean,Accuracy,Time
+Base_RUS,0.0425,0.8037,0.0807,0.193,0.1963,0.8053,0.8069,5.33
+Base,0.2145,0.0322,0.0561,0.0013,0.9678,0.1794,0.9886,10.99
+Base_LS_LS,0.175,0.0531,0.0815,0.0027,0.9469,0.2301,0.9874,11.59

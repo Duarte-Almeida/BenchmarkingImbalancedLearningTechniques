@@ -24,11 +24,15 @@ pip install -r requirements.txt
 
 ## Running the project
 
-As of now, this project only contains a a LightGBM classifier without any extra techniques and only supports the BAF dataset. To get metrics from applying this baseline classifier, run the following command:
+To get metrics from applying this baseline classifier, run the following command:
 
 ```sh
-python3 main.py -dataset baf
+python3 main.py -dataset baf [-oversampling <oversampling_strategy>] [-undersampling <oversampling_strategy>] [-label_smoothing] [-plot_scores]
 ```
+
+If -label_smoothing is set, the targets are smoothed and -plot_scores allows for a visualization of the class conditional distribution of the model's scores. As of now, the following undersamping and oversampling strategies are supported
+- <oversampling_strategy> can be SMOTE or ADASYN
+- <undersampling_strategy> can be Random Undersampling
 
 Only on the first time will the dataset be fetched from Kaggle. In subsequent executions, it will be stored in memory.
 
