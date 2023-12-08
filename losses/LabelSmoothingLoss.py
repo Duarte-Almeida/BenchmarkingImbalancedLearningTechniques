@@ -65,4 +65,4 @@ class LabelSmoothingLoss:
     def parameter_grid(self):
         if self.freeze:
             return {}
-        return {'alpha': [0.1]}
+        return {'alpha': [0.05, 0.1, 0.2, 0.5, 0.75, 0.9]}

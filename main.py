@@ -22,6 +22,7 @@ from sklearn.metrics import make_scorer
 from imblearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
 import sklearn.model_selection
+from sklearn import metrics
 
 import matplotlib.pyplot as plt
 from lightgbm import LGBMClassifier
@@ -42,13 +43,22 @@ def f1_measure(y_test, y_pred):
     else:
         return (2 * precision * recall) / (precision + recall)
 
+def auc(y_test, y_pred):    
+    return sklearn.metrics.roc_auc_score(y_test, y_pred)
+
+def compute_cutoff(y_test, y_pred):
+    fpr, tpr, th = sklearn.metrics.roc_curve(y_test, y_pred)
+    J_statistic = tpr + 1 - fpr
+    return th[np.argmax(J_statistic)]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-dataset',
                         choices=['baf'],
                         help="Which dataset should we choose?")
     parser.add_argument('-oversampling', default = None,
-                        choices=['SMOTE', 'ADASYN', 'KMeansSMOTE'],
+                        choices=['SMOTE', 'SMOTENC', 'ADASYN', 'KMeansSMOTE'],
                         help="Which oversampling strategy should we choose?")
     parser.add_argument('-undersampling', default = None,
                         choices=['RUS'],
@@ -71,6 +81,8 @@ def main():
     X_train, y_train = data["train"]
     X_test, y_test = data["test"]
 
+    #sys.exit()
+
     cat_feats = data["cat_feats"]
 
     steps = []
@@ -88,6 +100,7 @@ def main():
         sys.exit(-1)
     
     if opt.oversampling is not None:
+        print("Will perform oversampling!")
         preprocessor = oversamplers.fetch_oversampler(opt.oversampling)
         steps = steps + [("preprocessor", preprocessor)]
 
@@ -98,6 +111,7 @@ def main():
         name += f"_{opt.oversampling}"
 
     if opt.undersampling is not None:
+        print("Will perform undersampling!")
         preprocessor = undersamplers.fetch_undersampler(opt.undersampling)
         steps = steps + [("preprocessor", preprocessor)]
 
@@ -114,32 +128,44 @@ def main():
     else:
         ls = LabelSmoothingLoss(0, freeze = True)
         clf = LGBM(ls)
-
+    #preprocessor.set_params(**{"categorical_features":cat_feats})
+    #print(getattr(preprocessor, "categorical_features"))
     steps = steps + [("clf", clf)]
     for (parameter, values) in clf.parameter_grid().items():
         param_grid["clf__" + str(parameter)] = values
     pipeline = Pipeline(steps=steps)
     start_time = time.time()
     print('Starting training...')
-    search = GridSearchCV(pipeline, param_grid, scoring = make_scorer(f1_measure, greater_is_better=True), 
+    search = GridSearchCV(pipeline, param_grid, scoring = make_scorer(auc, greater_is_better=True, needs_proba = True), 
                             n_jobs=1, verbose = 4, error_score = "raise", refit = True, cv = 2)
     search.fit(X_train, y_train)
     print("Best parameter (CV score=%0.3f):" % search.best_score_)
     print(search.best_params_)
-    y_pred = search.predict(X_test)
+    probs = search.predict_proba(X_test)[:, 1]
+    test_probs = search.predict_proba(X_train)[:, 1]
+
+    th = compute_cutoff(y_train, test_probs)
+    y_pred = search.best_estimator_.predict(X_test, **{"th":th})
+
+    #y_pred = pipeline["clf"].predict(X_test)
+    #probs = pipeline["clf"].predict_proba(X_test)
 
     end_time = time.time()
     total_time = end_time - start_time
     print(f'Ended training and classification in {round(end_time - start_time, 2)} seconds.\n')
 
-    utils.dump_metrics(y_test, y_pred, name, total_time)
+    #display = sklearn.metrics.RocCurveDisplay.from_predictions(y_test, probs)
+    #plt.show()
+    utils.dump_metrics(y_test, y_pred, probs, name, total_time)
 
     if opt.plot_scores:
-        probs = search.best_estimator_["clf"].predict_proba(X_test)
+        #probs = search.best_estimator_["clf"].predict_proba(X_test)
+        #probs = pipeline["clf"].predict_proba(X_test)[:, 1]
         positives = probs[y_test == 1]
         negatives = probs[y_test == 0]
         plt.hist(probs[y_test == 1], bins = 100, range = (0, 1), label = "Positive", alpha = 0.5, weights = np.ones_like(positives)/float(len(positives)))
         plt.hist(probs[y_test == 0], bins = 100, range = (0, 1), label = "Negative", alpha = 0.5, weights = np.ones_like(negatives)/float(len(negatives)))
+        plt.axvline(x = th, alpha = 0.5, color = "red", linestyle = "--", linewidth = 1)
         plt.legend(loc='upper right')
         plt.show()
 
