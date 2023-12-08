@@ -13,6 +13,7 @@ class LGBM(BaseEstimator, ClassifierMixin):
 
     def fit(self, X, y):
         X, y = check_X_y(X, y)
+        self.classes_, y = np.unique(y, return_inverse=True)
         self.X_fit, self.X_val, self.y_fit, self.y_val = train_test_split(X, y, random_state=42)
         self.model = lgb.LGBMClassifier()
         self.model.set_params(
@@ -34,16 +35,24 @@ class LGBM(BaseEstimator, ClassifierMixin):
         self.y_ = y
         return self
 
-    def predict(self, X):
+    def predict(self, X, **kwargs):
+        if "th" in kwargs:
+            threshold = kwargs["th"]
+        else:
+            threshold = 0.5
         check_is_fitted(self, ['X_', 'y_'])
         X = check_array(X)
         scores = scipy.special.expit(self.model.predict(X, raw_score=True) + self.loss_fn.init_score(self.y_fit))
-        return np.where(scores <= 0.5, 0, 1)
+        return np.where(scores <= threshold, 0, 1)
 
     def predict_proba(self, X):
         check_is_fitted(self, ['X_', 'y_'])
         X = check_array(X)
-        return scipy.special.expit(self.model.predict(X, raw_score=True) + self.loss_fn.init_score(self.y_fit))
+        probs = scipy.special.expit(self.model.predict(X, raw_score=True) + self.loss_fn.init_score(self.y_fit))
+        #print(f"Probs: {probs}")
+        #return probs.reshape(1, -1)
+        res = np.vstack((1 - probs, probs)).T
+        return res
 
     def set_params(self, **params):
         if not params:

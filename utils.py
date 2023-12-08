@@ -3,6 +3,8 @@ from kaggle.api.kaggle_api_extended import KaggleApi
 from zipfile import ZipFile
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import roc_auc_score
+
 datasets = {'baf': ['sgpjesus/bank-account-fraud-dataset-neurips-2022', 'baf', 'Base.csv', 'fraud_bool']}
 
 def fetch_data(dataset):
@@ -22,14 +24,15 @@ def fetch_data(dataset):
             os.makedirs('datasets/')
         if not os.path.exists(f"datasets/{dir_name}"):
             os.makedirs(f"datasets/{dir_name}")
-        os.path.exists(f"datasets/{dir_name}/{dataset_file}") or print(f"Dataset {dir_name} does not exist. Fetching dataset {dir_name}...")
-        api = KaggleApi()
-        api.authenticate()
-        api.dataset_download_file(link, dataset_file, f"datasets/{dir_name}")
-        zf = ZipFile(f"datasets/{dir_name}/{dataset_file}.zip")
-        zf.extractall(f"datasets/{dir_name}")
-        zf.close()
-        os.remove(f"datasets/{dir_name}/{dataset_file}.zip")
+        if not os.path.exists(f"datasets/{dir_name}/{dataset_file}"):
+            print(f"Dataset {dir_name} does not exist. Fetching dataset {dir_name}...")
+            api = KaggleApi()
+            api.authenticate()
+            api.dataset_download_file(link, dataset_file, f"datasets/{dir_name}")
+            zf = ZipFile(f"datasets/{dir_name}/{dataset_file}.zip")
+            zf.extractall(f"datasets/{dir_name}")
+            zf.close()
+            os.remove(f"datasets/{dir_name}/{dataset_file}.zip")
     df = pd.read_csv(f"datasets/{dir_name}/{dataset_file}")
     labelencoder = LabelEncoder()
     cat_feats = df.select_dtypes(include='object').columns
@@ -49,7 +52,7 @@ def fetch_data(dataset):
      'cat_feats':cat_feats.to_list()}
 
 
-def dump_metrics(y_test, y_pred, name, time):
+def dump_metrics(y_test, y_pred, probs, name, time):
     TP = np.sum(y_pred[y_test == 1])
     TN = np.sum(1 - y_pred[y_test == 0])
     FP = np.sum(y_pred[y_test == 0])
@@ -80,6 +83,8 @@ def dump_metrics(y_test, y_pred, name, time):
         FNR = FN / (FN + TP)
     G_mean = np.sqrt((1 - FPR) * (1 - FNR))
     accuracy = (TP + TN) / (TP + TN + FP + FN)
+    auc = roc_auc_score(y_test, probs)
+
     print(f"Precision: {precision}")
     print(f"Recall: {recall}")
     print(f"F1 score: {F1}")
@@ -87,6 +92,7 @@ def dump_metrics(y_test, y_pred, name, time):
     print(f"False Negative Rate: {FNR}")
     print(f"G-mean: {G_mean}")
     print(f"Accuracy: {accuracy}")
+    print(f"AUC: {auc}")
     if not os.path.isfile('results.csv'):
         df = pd.DataFrame({'name':[name],  'Precision':[
           round(precision, 4)], 
@@ -102,6 +108,8 @@ def dump_metrics(y_test, y_pred, name, time):
           round(G_mean, 4)], 
          'Accuracy':[
           round(accuracy, 4)], 
+         'AUC': [
+            round(auc, 4)],
          'Time':[
           round(time, 2)]})
         df.set_index('name', inplace=True, drop=True)
@@ -116,6 +124,7 @@ def dump_metrics(y_test, y_pred, name, time):
             df.loc[(name, 'False Negative Rate')] = round(FNR, 4)
             df.loc[(name, 'G-mean')] = round(G_mean, 4)
             df.loc[(name, 'Accuracy')] = round(accuracy, 4)
+            df.loc[(name, 'AUC')] = round(auc, 4)
             df.loc[(name, 'Time')] = round(time, 2)
         else:
             new_row = pd.DataFrame({'name':[name],  'Precision':[
@@ -132,6 +141,8 @@ def dump_metrics(y_test, y_pred, name, time):
               round(G_mean, 4)], 
              'Accuracy':[
               round(accuracy, 4)], 
+             'AUC':[
+                round(auc, 4)],
              'Time':[
               round(time, 2)]})
             new_row.set_index('name', inplace=True, drop=True)
