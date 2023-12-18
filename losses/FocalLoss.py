@@ -3,7 +3,8 @@ from scipy import optimize
 from scipy import special
 
 class FocalLoss:
-    __doc__ = '\n    source: https://maxhalford.github.io/blog/lightgbm-focal-loss/\n    '
+    ''' source: https://maxhalford.github.io/blog/lightgbm-focal-loss/
+    ''' 
 
     def __init__(self, gamma, alpha=None):
         self.alpha = alpha
