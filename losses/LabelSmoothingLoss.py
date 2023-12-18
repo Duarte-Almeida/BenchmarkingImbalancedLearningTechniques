@@ -4,8 +4,10 @@ from scipy import special
 import sklearn.metrics
 
 class LabelSmoothingLoss:
-    __doc__ = '\n    A class implementing the corresponding loss of Label Smoothing preprocessing\n    adapted from: https://maxhalford.github.io/blog/lightgbm-focal-loss/\n    '
-
+    '''
+    A class implementing the corresponding loss of Label Smoothing preprocessing
+    adapted from: https://maxhalford.github.io/blog/lightgbm-focal-loss/ 
+    '''
     def __init__(self, alpha=0.1, freeze=False):
         self.alpha = alpha
         self.freeze = freeze
@@ -36,7 +38,7 @@ class LabelSmoothingLoss:
     def init_score(self, y_true):
         p = np.clip(np.mean(y_true), 1e-15,  1 - 1e-15)
         log_odds = np.log(p / (1 - p))
-        print(f"Starting from p = {p} and {log_odds}")
+        #print(f"Starting from p = {p} and {log_odds}")
         return log_odds
 
     def obj(self, train_data, preds):
@@ -65,4 +67,4 @@ class LabelSmoothingLoss:
     def parameter_grid(self):
         if self.freeze:
             return {}
-        return {'alpha': [0.05, 0.1, 0.2, 0.5, 0.75, 0.9]}
+        return {'alpha': [0.05, 0.1, 0.2, 0.5]}

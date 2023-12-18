@@ -36,11 +36,13 @@ def fetch_data(dataset):
     df = pd.read_csv(f"datasets/{dir_name}/{dataset_file}")
     labelencoder = LabelEncoder()
     cat_feats = df.select_dtypes(include='object').columns
+    non_cat_feats = df.select_dtypes(exclude='object').columns
+    df = df[list(non_cat_feats) + list(cat_feats)]
     for col in cat_feats:
         df[col] = labelencoder.fit_transform(df[col])
 
     for col in cat_feats:
-        df[col] = df[col].astype('int')
+        df[col] = df[col].astype('category')
 
     X = df.drop(columns=target_name)
     y = df[target_name]
