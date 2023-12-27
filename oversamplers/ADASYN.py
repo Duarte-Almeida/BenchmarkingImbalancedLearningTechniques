@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from imblearn.over_sampling import ADASYN
 from sklearn.utils import check_random_state
 from sklearn.preprocessing import OneHotEncoder
@@ -6,20 +7,29 @@ from sklearn.utils.validation import _num_features
 from sklearn.utils import _safe_indexing
 import FaissKNN
 from scipy import sparse
+from imblearn.utils import check_sampling_strategy
+from scipy.stats import uniform
 
 class ADASYNWrapper(ADASYN):
 
-    def __init__(self, categorical_features=None, random_state=42):
+    def __init__(self, categorical_features = 0, random_state=42):
         super().__init__(n_neighbors = FaissKNN.FaissKNN())
         self.categorical_features = categorical_features
         self.random_state = random_state
         self.kwargs = {}
 
-    def _fit_resample(self, X, y):
+    def fit_resample(self, X, y):
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
+        if isinstance(y, pd.Series):
+            y = y.to_numpy()
+        
+        self.sampling_strategy_ = check_sampling_strategy(self.sampling_strategy, y, "over-sampling")
+        
         self.n_features_ = _num_features(X)
         random_state = check_random_state(self.random_state)
 
-        if self.categorical_features:
+        if self.categorical_features > 0:
 
             self.encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
             X_cat = self.encoder.fit_transform(X[:, -self.categorical_features:])
@@ -33,9 +43,9 @@ class ADASYNWrapper(ADASYN):
         else:
             X_transformed = X
 
-        X_resampled, y_resampled = self._fit_resample_aux(X_transformed, y)
+        X_resampled, y_resampled = self.fit_resample_aux(X_transformed, y)
 
-        if self.categorical_features:
+        if self.categorical_features > 0:
             X_cat_resampled = X_resampled[:, -X_cat.shape[1]:]
             X_non_cat_resampled = X_resampled[:, :-X_cat.shape[1]]
 
@@ -45,7 +55,7 @@ class ADASYNWrapper(ADASYN):
         
         return X_resampled, y_resampled
     
-    def _fit_resample_aux(self, X, y):
+    def fit_resample_aux(self, X, y):
 
         self._validate_estimator()
         random_state = check_random_state(self.random_state)
@@ -65,6 +75,7 @@ class ADASYNWrapper(ADASYN):
             self.nn_.fit(X)
 
             nns = self.nn_.kneighbors(X_class, return_distance=False)[:, 1:]
+            #print(y)
             # The ratio is computed using a one-vs-rest manner. Using majority
             # in multi-class would lead to slightly different results at the
             # cost of introducing a new parameter.
@@ -178,7 +189,7 @@ class ADASYNWrapper(ADASYN):
 
     def parameter_grid(self):
         grid = {
-            'sampling_strategy': [0.1, 0.15, 0.2, 0.25],
+            'sampling_strategy': uniform(0, 1)
         }
         if self.n_neighbors.parameter_grid() is not None:
             for key, value in self.n_neighbors.parameter_grid().items():

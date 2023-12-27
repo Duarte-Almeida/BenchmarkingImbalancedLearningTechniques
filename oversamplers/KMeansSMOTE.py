@@ -4,19 +4,55 @@ from sklearn.utils import check_random_state
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.utils.validation import _num_features
 import FaissKNN
+import pandas as pd
+from sklearn.exceptions import FitFailedWarning
+from scipy.stats import uniform, loguniform, rv_discrete
+
+from scipy.stats import rv_discrete
+
+class DiscreteLogUniform(rv_discrete):
+    """
+    Discrete version of the log uniform distribution.
+    """
+    
+    def _pmf(self, k, alpha):
+        """
+        Probability mass function for the discrete log uniform distribution.
+        
+        Parameters:
+        - k: Array-like, integer values at which to compute the PMF.
+        - alpha: Shape parameter (similar to the continuous log uniform distribution).
+        """
+        # Ensure alpha is positive to avoid log(0) or negative values.
+        if alpha <= 0:
+            return np.zeros_like(k, dtype=float)
+        
+        # Calculate PMF
+        #pmf = np.where(k > 1, np.log(k) - np.log(k - 1), 0)
+        #pmf *= alpha / (k * np.log(10))e
+        pmf = loguniform.cdf(k + 1, self.a, self.b) - loguniform.cdf(k, self.a, self.b)
+        pmf = pmf / np.sum(pmf)
+        
+        return pmf
+
 
 class KMeansSMOTEWrapper(KMeansSMOTE):
-    def __init__(self, categorical_features=None, random_state=42):
+    def __init__(self, categorical_features = 0, random_state=42):
         super().__init__(k_neighbors = FaissKNN.FaissKNN())
         self.categorical_features = categorical_features
         self.random_state = random_state
         self.kwargs = {}
 
-    def _fit_resample(self, X, y):
+    def fit_resample(self, X, y):
+
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
+        if isinstance(y, pd.Series):
+            y = y.to_numpy()
         self.n_features_ = _num_features(X)
         random_state = check_random_state(self.random_state)
 
-        if self.categorical_features:
+        if self.categorical_features > 0:
 
             self.encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
             X_cat = self.encoder.fit_transform(X[:, -self.categorical_features:])
@@ -30,9 +66,13 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
         else:
             X_transformed = X
 
-        X_resampled, y_resampled = super()._fit_resample(X_transformed, y)
+        try:
+            X_resampled, y_resampled = super().fit_resample(X_transformed, y)
+        except RuntimeError:
+            print(f"The cluster threshold is {self.cluster_balance_threshold}")
+            raise RuntimeError
 
-        if self.categorical_features:
+        if self.categorical_features > 0:
             X_cat_resampled = X_resampled[:, -X_cat.shape[1]:]
             X_non_cat_resampled = X_resampled[:, :-X_cat.shape[1]]
 
@@ -46,25 +86,27 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
 
         rng = check_random_state(self.random_state)
         X_new = super()._generate_samples(X, nn_data, nn_num, rows, cols, steps)
-        all_neighbors = nn_data[nn_num[rows]]
 
-        categories_size = [self.n_features_ - self.categorical_features] + [
-            cat.size for cat in self.encoder.categories_
-        ]
+        if self.categorical_features > 0:
+            all_neighbors = nn_data[nn_num[rows]]
 
-        for start_idx, end_idx in zip(
-            np.cumsum(categories_size)[:-1], np.cumsum(categories_size)[1:]
-        ):
-            col_maxs = all_neighbors[:, :, start_idx:end_idx].sum(axis=1)
-            # tie breaking argmax
-            is_max = np.isclose(col_maxs, col_maxs.max(axis=1, keepdims=True))
-            max_idxs = rng.permutation(np.argwhere(is_max))
-            xs, idx_sels = np.unique(max_idxs[:, 0], return_index=True)
-            col_sels = max_idxs[idx_sels, 1]
+            categories_size = [self.n_features_ - self.categorical_features] + [
+                cat.size for cat in self.encoder.categories_
+            ]
 
-            ys = start_idx + col_sels
-            X_new[:, start_idx:end_idx] = 0
-            X_new[xs, ys] = 1
+            for start_idx, end_idx in zip(
+                np.cumsum(categories_size)[:-1], np.cumsum(categories_size)[1:]
+            ):
+                col_maxs = all_neighbors[:, :, start_idx:end_idx].sum(axis=1)
+                # tie breaking argmax
+                is_max = np.isclose(col_maxs, col_maxs.max(axis=1, keepdims=True))
+                max_idxs = rng.permutation(np.argwhere(is_max))
+                xs, idx_sels = np.unique(max_idxs[:, 0], return_index=True)
+                col_sels = max_idxs[idx_sels, 1]
+
+                ys = start_idx + col_sels
+                X_new[:, start_idx:end_idx] = 0
+                X_new[xs, ys] = 1
 
         return X_new
 
@@ -73,11 +115,13 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
                 for param in self._get_param_names()}
     
     def set_params(self, **params):
+        #print(f"Setting params {params}")
         if not params:
             return self
         attr_params = {}
         for key, value in params.items():
             if '__' in key:
+                #print(f"Setting sub parameter")
                 idx = key.find('__')
                 attr = key[:idx]
                 attr_param = key[idx + 2:]
@@ -85,9 +129,11 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
                     if attr not in attr_params:
                         attr_params[attr] = {}
                     attr_params[attr][attr_param] = value
-            if hasattr(self, key):
+            elif hasattr(self, key):
+                #print(f"Setting parameter")
                 setattr(self, key, value)
             else:
+                #rint(f"Do not have parameter!")
                 self.kwargs[key] = value
 
         for attr, attr_dict in attr_params.items():
@@ -96,10 +142,13 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
         return self
 
     def parameter_grid(self):
+        values = np.arange(5, 500)
+        probabilities = loguniform.cdf(values + 1, 5, 501) - loguniform.cdf(values, 5, 501)
+        probabilities = probabilities / np.sum(probabilities)
         grid = {
-            'sampling_strategy': [0.1, 0.15, 0.2, 0.25],
-            'cluster_balance_threshold': [0.01, 0.02, 0.05, 0.1],
-            'kmeans_estimator': [5, 10, 20]
+            'sampling_strategy': uniform(0, 1),
+            'cluster_balance_threshold': loguniform(0.001, 0.1),
+            'kmeans_estimator': rv_discrete(values = (values, probabilities))
         }
         if self.k_neighbors.parameter_grid() is not None:
             for key, value in self.k_neighbors.parameter_grid().items():

@@ -60,21 +60,15 @@ class RACOG(BaseOverSampler):
         - array of indices: array of categorical feature indices
         - list of labels: column labels of a pandas dataframe
 
-    warmup_offset: int
-        Warm up for gibbs sampler. It is number of sample generation iterations
-        that are needed for the samples to reach a stationary distribution
-
     lag0: int
         Lag is the number of consecutive samples that are discarded from
         the Markov chain following each accepted sample to avoid
         autocorrelation between consecutive samples
 
-    n_iter: int or 'auto'
-        Total number of iteration per one run of Gibbs sampler
-
-    ignition_step: int or 'auto'
-        Gap between two samples of original data using for ignite Gibbs sampler
-
+    offset: int
+        Warm up for gibbs sampler. It is number of sample generation iterations
+        that are needed for the samples to reach a stationary distribution
+        
     root: int
         Index of the root feature using in Chow-Liu algorithm
 
@@ -120,7 +114,7 @@ class RACOG(BaseOverSampler):
     """
 
     def __init__(self, sampling_strategy='auto', random_state=42, discretization='mdlp', categorical_features='auto',
-                 offset=100, lag=20, n_iter='auto', ignition_step='auto', root=0, only_sampled = False,
+                 offset=500, lag=20, root=0, only_sampled = False,
                  threshold=10, eps=10E-5, verbose=2, shuffle=False, n_jobs=-1):
 
         super().__init__(sampling_strategy=sampling_strategy)
@@ -137,7 +131,6 @@ class RACOG(BaseOverSampler):
         self.offset = offset
         self.lag = lag
         self.n_iter = n_iter
-        self.ignition_step = ignition_step
         self.threshold = threshold
         self.eps = eps
 
@@ -237,7 +230,6 @@ class RACOG(BaseOverSampler):
             priors = self.priors[class_sample]
             depend = self.structure[class_sample]
             probs = self.probs[class_sample]        
-            step = self.ignition_step
 
             n_iter = int(np.ceil(n_samples / X_class.shape[0])) * lag0 + offset
             val_list = self._get_vlist(priors)

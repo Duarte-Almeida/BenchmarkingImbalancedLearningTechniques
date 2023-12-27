@@ -1,9 +1,11 @@
 import os, random, numpy as np, pandas as pd, time
+import matplotlib.pyplot as plt
 from kaggle.api.kaggle_api_extended import KaggleApi
 from zipfile import ZipFile
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve
+import pickle
 
 datasets = {'baf': ['sgpjesus/bank-account-fraud-dataset-neurips-2022', 'baf', 'Base.csv', 'fraud_bool']}
 
@@ -54,7 +56,7 @@ def fetch_data(dataset):
      'cat_feats':cat_feats.to_list()}
 
 
-def dump_metrics(y_test, y_pred, probs, name, time):
+def dump_metrics(y_test, y_pred, probs, name, time, model_config):
     TP = np.sum(y_pred[y_test == 1])
     TN = np.sum(1 - y_pred[y_test == 0])
     FP = np.sum(y_pred[y_test == 0])
@@ -86,6 +88,7 @@ def dump_metrics(y_test, y_pred, probs, name, time):
     G_mean = np.sqrt((1 - FPR) * (1 - FNR))
     accuracy = (TP + TN) / (TP + TN + FP + FN)
     auc = roc_auc_score(y_test, probs)
+    fpr, tpr, _ = roc_curve(y_test, probs)
 
     print(f"Precision: {precision}")
     print(f"Recall: {recall}")
@@ -95,7 +98,36 @@ def dump_metrics(y_test, y_pred, probs, name, time):
     print(f"G-mean: {G_mean}")
     print(f"Accuracy: {accuracy}")
     print(f"AUC: {auc}")
-    if not os.path.isfile('results.csv'):
+    if not os.path.exists('results/'):
+            os.makedirs('results/')
+    if not os.path.exists(f'results/{name}'):
+            os.makedirs(f'results/{name}')
+
+    # Plot ROC curve
+    plt.figure(figsize=(8, 8))
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (area = {auc:.2f})')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(name.replace('_', ' '))
+    plt.legend(loc='lower right')
+
+    # Save the figure
+    config_dir = f'config/'
+    os.makedirs(config_dir, exist_ok=True)
+    with open(config_dir + f"/{name}.pkl", "wb") as fp:
+        pickle.dump(model_config, fp)
+
+    # save the model configuration
+    results_dir = f'results/{name}'
+    os.makedirs(results_dir, exist_ok=True)
+    plt.savefig(os.path.join(results_dir, f'{name}_roc.pdf'))
+    plt.clf()
+
+
+    if not os.path.isfile('results/results.csv'):
         df = pd.DataFrame({'name':[name],  'Precision':[
           round(precision, 4)], 
          'Recall':[
@@ -115,9 +147,9 @@ def dump_metrics(y_test, y_pred, probs, name, time):
          'Time':[
           round(time, 2)]})
         df.set_index('name', inplace=True, drop=True)
-        df.to_csv('results.csv')
+        df.to_csv('results/results.csv')
     else:
-        df = pd.read_csv('results.csv', index_col='name')
+        df = pd.read_csv('results/results.csv', index_col='name')
         if name in df.index:
             df.loc[(name, 'Precision')] = round(precision, 4)
             df.loc[(name, 'Recall')] = round(recall, 4)
@@ -149,4 +181,4 @@ def dump_metrics(y_test, y_pred, probs, name, time):
               round(time, 2)]})
             new_row.set_index('name', inplace=True, drop=True)
             df = df.append(new_row)
-        df.to_csv('results.csv')
+        df.to_csv('results/results.csv')

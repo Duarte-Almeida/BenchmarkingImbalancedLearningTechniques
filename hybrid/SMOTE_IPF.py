@@ -96,7 +96,7 @@ class SMOTEIPFWrapper(BaseEstimator, ClassifierMixin):
 
     def parameter_grid(self):
         return {
-            'k': [5],
+            'k': randint(3, 5),
             'p': [0.05, 0.1, 0.2], 
             'voting': ['majority']
         }

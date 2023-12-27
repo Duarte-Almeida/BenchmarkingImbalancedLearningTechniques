@@ -4,6 +4,7 @@ from sklearn.neighbors._base import NeighborsBase, KNeighborsMixin
 from sklearn.utils.validation import check_array
 import faiss
 from scipy import sparse
+from scipy.stats import randint
 
 class FaissKNN(NeighborsBase, KNeighborsMixin):
 
@@ -15,6 +16,7 @@ class FaissKNN(NeighborsBase, KNeighborsMixin):
     def fit(self, X, y=None):
         X = check_array(X)
         self.X_ = np.ascontiguousarray(X)
+        self.y_ = np.ascontiguousarray(y)
         self.index_ = faiss.IndexFlatL2(self.X_.shape[1])
         self.index_.add(self.X_.astype(np.float32))
         return self
@@ -36,8 +38,20 @@ class FaissKNN(NeighborsBase, KNeighborsMixin):
             return I
 
     def predict(self, X):
-        D, I = self.kneighbors(X, n_neighbors=1, return_distance=True)
-        return self.y_[I]
+        D, I = self.kneighbors(X, n_neighbors=self.n_neighbors, return_distance=True)
+
+        # Use inverse of distances as weights for voting
+        weights = 1 / (D + 1e-6)  # Adding a small epsilon to avoid division by zero
+
+        # Perform weighted voting to predict the class
+        weighted_votes = np.zeros((X.shape[0], len(np.unique(self.y_))), dtype=np.float32)
+        for i in range(self.n_neighbors):
+            weighted_votes += np.eye(len(np.unique(self.y_)))[self.y_[I[:, i]]] * weights[:, i][:, np.newaxis]
+
+        # Assign the class with the maximum weighted sum as the prediction
+        predictions = np.argmax(weighted_votes, axis=1)
+        
+        return predictions
 
     def fit_predict(self, X, y=None):
         self.fit(X, y)
@@ -74,4 +88,4 @@ class FaissKNN(NeighborsBase, KNeighborsMixin):
         return self
 
     def parameter_grid(self):
-        return {'n_neighbors': [3, 5, 7]}
+        return {'n_neighbors': randint(2, 10)}
