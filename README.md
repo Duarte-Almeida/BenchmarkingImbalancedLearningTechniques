@@ -27,8 +27,7 @@ pip install -r requirements.txt
 To get metrics from applying this baseline classifier, run the following command:
 
 ```sh
-python3 main.py -dataset baf [-oversampling <oversampling_strategy>] [-undersampling <oversampling_strategy>] [-label_smoothing] [-plot_scores]
--data_subsampling <proportion>]
+python3 main.py -dataset baf [-oversampling <oversampling_strategy>] [-undersampling <oversampling_strategy>] [-label_smoothing] [-plot_scores] [-data_subsampling <proportion>] [-ensemble <"us_strat"-"us_times"-"meta_learner">]
 ```
 
 If -label_smoothing is set, the targets are smoothed and -plot_scores allows for a visualization of the class conditional distribution of the model's scores. The value <proportion> determines the amount of training examples to retain from the original training set (useful for very big datasets). As of now, the following undersamping and oversampling strategies are supported

@@ -33,11 +33,13 @@ import matplotlib.pyplot as plt
 def auc(y_test, y_pred):    
     return sklearn.metrics.roc_auc_score(y_test, y_pred)
 
-def main():
+def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('-dataset',
                         choices=['baf'],
                         help="Which dataset should we choose?")
+    parser.add_argument('-ensemble', default = None,
+                        help="What is the ensemble strategy?")
     parser.add_argument('-data_subsampling', default = 1.00,
                         type = float,
                         help="By how much should the dataset be reduced?")
@@ -60,25 +62,10 @@ def main():
                         choices=['CS', 'ROC'],
                         help="Which threshold-moving strategy should we choose?")
     
-    opt = parser.parse_args()
+    return parser.parse_args()
 
-    name = "Base"
 
-    data = utils.fetch_data(opt.dataset)
-    X_train, y_train = data["train"]
-    X_test, y_test = data["test"]
-
-    cat_feats = data["cat_feats"]
-
-    np.random.seed(42)
-    X_train = X_train.reset_index(drop = True)
-    y_train = y_train.reset_index(drop = True)
-    if opt.data_subsampling < 1.00:
-        X_train = X_train.reset_index(drop = True)
-        y_train = y_train.reset_index(drop = True)
-        sub_idx = np.random.choice(X_train.shape[0], size = int(X_train.shape[0] * opt.data_subsampling), replace = False)
-        X_train, y_train = X_train.loc[sub_idx], y_train.loc[sub_idx]
-
+def preprocess(opt, cat_feats, name):
     steps = []
     param_grid = {}
 
@@ -144,8 +131,10 @@ def main():
     else:
         prep_name = None
 
-    start_time = time.time()
-    print('Starting training...')
+    return (param_grid, pipeline, prep_name, name)
+
+
+def train(opt, param_grid, pipeline, prep_name, cat_feats, X_train, y_train):
     is_oversampler = opt.oversampling is not None
     is_undersampler = opt.undersampling is not None
     search = CustomCV(prep_name = prep_name, estimator = pipeline, param_distributions = param_grid,
@@ -155,15 +144,83 @@ def main():
                       
     search.fit(X_train, y_train, clf__categorical_features = len(cat_feats))
 
+    return search
+
+
+def classify(opt, search, X_train, y_train, X_test):
     probs = search.predict_proba(X_test)[:, 1]
     train_probs = search.predict_proba(X_train)[:, 1]
 
     th = thresholds.fetch_threshold(opt.threshold, y_train, train_probs)
     y_pred = search.best_estimator_.predict(X_test, **{"th":th})
 
+    return (y_pred, probs, th)
+
+
+def main():
+    opt = parse_arguments()
+
+    name = "Base"
+
+    data = utils.fetch_data(opt.dataset)
+    X_train, y_train = data["train"]
+    X_test, y_test = data["test"]
+
+    cat_feats = data["cat_feats"]
+
+    np.random.seed(42)
+    X_train = X_train.reset_index(drop = True)
+    y_train = y_train.reset_index(drop = True)
+
+    if opt.data_subsampling < 1.00:
+        X_train = X_train.reset_index(drop = True)
+        y_train = y_train.reset_index(drop = True)
+        sub_idx = np.random.choice(X_train.shape[0], size = int(X_train.shape[0] * opt.data_subsampling), replace = False)
+        X_train, y_train = X_train.loc[sub_idx], y_train.loc[sub_idx]
+
+    num_iterations = 1
+    if opt.ensemble is not None:
+        num_iterations = opt.ensemble.split('-')[1]
+        opt.undersampling = opt.ensemble.split('-')[0]
+
+    classifiers = []
+
+    start_time = time.time()
+    print('Starting training...')
+
+    for _ in range(num_iterations):
+        it_classifiers = []
+        param_grid, pipeline, prep_name, name = preprocess(opt, cat_feats, name)
+
+        search = train(opt, param_grid, pipeline, prep_name, cat_feats, X_train, y_train)
+        it_classifiers.append(search)
+
+        if opt.ensemble is not None:
+            # TODO: RFs
+            search = train(opt, param_grid, pipeline, prep_name, cat_feats, X_train, y_train)
+            it_classifiers.append(search)
+
+        classifiers.append(it_classifiers)
+
+    predictions = []
+    probs = []
+    th = 0
+    for i in range(num_iterations):
+        y_pred, probs, th = classify(opt, classifiers[i][0], X_train, y_train, X_test)
+        predictions.append(y_pred)
+
+        if opt.ensemble is not None:
+            y_pred, probs, th = classify(opt, classifiers[i][1], X_train, y_train, X_test)
+            predictions.append(y_pred)
+
+    # TODO: if opt.ensemble is not None, feed predictions to meta-learner in opt.ensemble.split('-')[2]
+
     end_time = time.time()
     total_time = end_time - start_time
-    print(f'Ended training and classification in {round(end_time - start_time, 2)} seconds.\n')
+    print(f'Ended training and classification in {round(total_time, 2)} seconds.\n')
+
+    if opt.ensemble is not None:
+        name = "US-SE_" + opt.ensemble
 
     utils.dump_metrics(y_test, y_pred, probs, name, total_time)
 
