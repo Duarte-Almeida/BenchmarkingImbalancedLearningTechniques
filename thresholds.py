@@ -3,10 +3,17 @@ from scipy.optimize import minimize_scalar
 import sklearn.metrics
 
 
-def compute_cutoff(y_test, y_pred):
+def compute_J_cutoff(y_test, y_pred):
     fpr, tpr, th = sklearn.metrics.roc_curve(y_test, y_pred)
     J_statistic = tpr + 1 - fpr
     return th[np.argmax(J_statistic)]
+
+def compute_FPR_cutoff(y_test, y_pred):
+    fpr, tpr, th = sklearn.metrics.roc_curve(y_test, y_pred)
+    fpr_th = 0.05 # default fpr value
+    max_fpr_idx = np.argmax(fpr[fpr < fpr_th])
+    res = th[max_fpr_idx]
+    return res
 
 
 def compute_cs_threshold(y_test, y_pred):
@@ -28,8 +35,6 @@ def compute_cs_threshold(y_test, y_pred):
     # Costs: [[TP, FP], [FN, TN]]
     cost_matrices_to_try = [
         [[0, 1], [imbalance_ratio, 0]], # Seems fine
-        # [[0, 1], [1000, 0]],
-        # [[0, 1], [100, 0]],
     ]
 
     def cost_function(threshold, y_test, y_pred, cost_matrix):
@@ -53,7 +58,8 @@ def compute_cs_threshold(y_test, y_pred):
 
 
 threshold_names = {
-    'ROC':compute_cutoff,
+    'FPR':compute_FPR_cutoff, 
+    'J':compute_J_cutoff,
     'CS':compute_cs_threshold
 }
 

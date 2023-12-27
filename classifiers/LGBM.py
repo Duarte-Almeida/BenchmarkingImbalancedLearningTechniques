@@ -4,6 +4,8 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.model_selection import train_test_split
 import scipy.special, lightgbm as lgb
 import matplotlib.pyplot as plt
+from scipy.stats import loguniform, uniform, randint
+import time
 
 class LGBM(BaseEstimator, ClassifierMixin):
 
@@ -29,7 +31,7 @@ class LGBM(BaseEstimator, ClassifierMixin):
             objective=self.loss_fn.obj,
             metric='None', 
             learning_rate=0.3, 
-            num_estimators=1000, 
+            n_estimators=1000, 
             early_stopping_round=20,
             verbose = -1,
         )
@@ -49,7 +51,7 @@ class LGBM(BaseEstimator, ClassifierMixin):
     def predict(self, X, **kwargs):
         if "th" in kwargs:
             threshold = kwargs["th"]
-        else:
+        else: # default threshold of 0.4
             threshold = 0.5
         check_is_fitted(self, ['X_', 'y_'])
         X = check_array(X)
@@ -57,12 +59,14 @@ class LGBM(BaseEstimator, ClassifierMixin):
         return np.where(scores <= threshold, 0, 1)
 
     def predict_proba(self, X):
+        #print(f"Predicting proba...")
+        start = time.time()
         check_is_fitted(self, ['X_', 'y_'])
         X = check_array(X)
         probs = scipy.special.expit(self.model.predict(X, raw_score=True) + self.loss_fn.init_score(self.y_fit))
-        #print(f"Probs: {probs}")
-        #return probs.reshape(1, -1)
         res = np.vstack((1 - probs, probs)).T
+        end = time.time()
+        #print(f"Predicted in {end-start}")
         return res
 
     def set_params(self, **params):
@@ -90,20 +94,17 @@ class LGBM(BaseEstimator, ClassifierMixin):
 
     def parameter_grid(self):
         grid = {
-            'learning_rate': [0.05, 0.1, 0.2, 0.3],  # Learning rate
-            'num_leaves': [31, 63, 127],  # Maximum number of leaves in one tree
-            'max_depth': [-1, 5, 10],  # Maximum depth of the tree
-            'min_child_samples': [20, 50, 100],  # Minimum number of data needed in a child
-            'subsample': [0.8, 1.0],  # Subsample ratio of the training instance
-            'colsample_bytree': [0.8, 1.0],  # Subsample ratio of columns when constructing each tree
-            'reg_alpha': [0.0, 0.1, 0.5],  # L1 regularization term on weights
-            'reg_lambda': [0.0, 0.1, 0.5],  # L2 regularization term on weights
-            'scale_pos_weight': [1],  # Control the balance of positive and negative weights
-
-            'n_estimators': [50, 100, 200, 1000],  # Number of boosting rounds
-            'early_stopping_rounds': [20],  # Early stopping to prevent overfitting
+            'learning_rate': loguniform(0.01, 0.5),  # Learning rate
+            'num_leaves': randint(10, 200),  # Maximum number of leaves in one tree
+            'max_depth': randint(-1, 10),  # Maximum depth of the tree
+            'min_child_samples': randint(20, 100),  # Minimum number of data needed in a child
+            'subsample': uniform(0.5, 1.0),  # Subsample ratio of the training instance
+            'colsample_bytree': uniform(0.5, 1.0),  # Subsample ratio of columns when constructing each tree
+            'reg_alpha': uniform(0, 2),  # L1 regularization term on weights
+            'reg_lambda': uniform(0, 2),  # L2 regularization term on weights
+            'n_estimators': uniform(50, 500),  # Number of boosting rounds
         }
-        grid = {}
+        #grid = {}
         if self.loss_fn.parameter_grid() is not None:
             for key, value in self.loss_fn.parameter_grid().items():
                 grid['loss_fn__' + key] = value
