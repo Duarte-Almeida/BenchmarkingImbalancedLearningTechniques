@@ -61,6 +61,7 @@ class CustomCV(RandomizedSearchCV):
         self.estimator = estimator
         self.prep_name = prep_name
         self.random_state = 42
+        self.cv_predictions = np.array([])
         if self.prep_name is not None:
             self.prep = self.estimator.named_steps[prep_name]
 
@@ -74,7 +75,7 @@ class CustomCV(RandomizedSearchCV):
             else:
                 self.param_combinations = []
 
-    def fit(self, X, y, *args, **kwargs):
+    def fit(self, X, y, generate_metadata = False, *args, **kwargs):
 
         best_params_ = []
         best_score_ = -np.inf
@@ -88,6 +89,7 @@ class CustomCV(RandomizedSearchCV):
         if self.prep_name is None:
             self.refit = True
             super().fit(X, y, *args, **kwargs)
+            self.cv_predictions = self.best_estimator_.predict(X)
             return self.best_estimator_
         
         if self.param_combinations == []:
@@ -95,12 +97,21 @@ class CustomCV(RandomizedSearchCV):
             setattr(self, "cv", splits)
             self.refit = True
             super().fit(X_tr, y_tr, *args, **kwargs)
+            self.cv_predictions = self.best_estimator_.predict(X)
             print("Best parameter (CV score=%0.3f):" %  self.best_score_)
             print(self.best_params_)
             return self.best_estimator_
+        
+
+        num_samples = len(X)
+        num_its = len(self.param_combinations)
+        print("Iterations:")
+        print(num_its)
+
+        cv_predictions = np.full((num_samples, num_its), np.nan)
 
         # Perform the two-step grid search
-        for params in self.param_combinations:
+        for it_idx, params in enumerate(self.param_combinations):
             self.prep.set_params(**params)
             try:
                 X_tr, y_tr, splits = get_train_test_splits(X, y, self.prep, self.oversampler, self.undersampler)
@@ -108,7 +119,24 @@ class CustomCV(RandomizedSearchCV):
                 continue
 
             setattr(self, "cv", splits)
-            super().fit(X_tr, y_tr, *args, **kwargs)
+
+
+            if generate_metadata:
+                self.refit = True
+                super().fit(X_tr, y_tr, *args, **kwargs)
+
+                # Store the cross-validated predictions
+                # test_fold_index = splits[0][1]
+                # X_test_fold = X[test_fold_index, :]
+                # cv_preds = self.best_estimator_.predict(X_test_fold)
+
+                # cv_predictions[test_fold_index, it_idx] = cv_preds
+
+                cv_preds = self.best_estimator_.predict(X)
+                cv_predictions[:, it_idx] = cv_preds
+
+            else:
+                super().fit(X_tr, y_tr, *args, **kwargs)
 
 
             if self.best_score_ > best_score_:
@@ -125,8 +153,7 @@ class CustomCV(RandomizedSearchCV):
 
         for (param, value) in best_prep_params_.items():
             best_params_[self.prep_name + "__" + param] = value
-        
-        
+
         self.best_params_ = best_params_
         self.best_score_ = best_score_
         self.best_estimator_ = self.estimator
@@ -135,5 +162,16 @@ class CustomCV(RandomizedSearchCV):
                 
         print("Best parameter (CV score=%0.3f):" %  self.best_score_)
         print(self.best_params_)
+
+        self.cv_predictions = np.mean(cv_predictions, axis=1)
+
+        print("NaNs:")
+        print(np.sum(np.isnan(self.cv_predictions)))
+
+        # # Sort indices and apply the same permutation to cv_predictions
+        # sorting_permutation = np.argsort(self.indices)
+        # self.indices = self.indices[sorting_permutation]
+        # self.cv_predictions = self.cv_predictions[sorting_permutation]
+
         return self.best_estimator_
 

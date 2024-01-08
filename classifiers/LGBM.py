@@ -107,5 +107,7 @@ class LGBM(BaseEstimator, ClassifierMixin):
         if self.loss_fn.parameter_grid() is not None:
             for key, value in self.loss_fn.parameter_grid().items():
                 grid['loss_fn__' + key] = value
+        else:
+            grid = {'learning_rate': [0.05, 0.1, 0.2, 0.3]}
 
         return grid

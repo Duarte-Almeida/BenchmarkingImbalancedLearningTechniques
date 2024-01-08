@@ -8,9 +8,11 @@ import utils
 import oversamplers
 import undersamplers
 import hybrid
+import meta_learners
 import thresholds
 from losses import LabelSmoothingLoss, FocalLoss
 from classifiers import LGBM
+from classifiers import CustomRandomForest
 from CustomCV import CustomCV
 
 import lightgbm as lgb
@@ -43,6 +45,9 @@ def parse_arguments():
     parser.add_argument('-data_subsampling', default = 1.00,
                         type = float,
                         help="By how much should the dataset be reduced?")
+    parser.add_argument('-classifier', default = 'Base',
+                        choices=['Base', 'RF'],
+                        help="Which classifier should we choose?")
     parser.add_argument('-oversampling', default = None,
                         choices=['SMOTE', 'ADASYN', 'KMeansSMOTE', 'RACOG'],
                         help="Which oversampling strategy should we choose?")
@@ -63,6 +68,36 @@ def parse_arguments():
                         help="Which threshold-moving strategy should we choose?")
     
     return parser.parse_args()
+
+
+def generate_subsets(X_train, y_train, subsampler_name, j=2):
+    subsampler = None
+    if subsampler_name == 'RUS':
+        subsampler = undersamplers.RUSWrapper(random_state=42)
+    if subsampler_name == 'ENN':
+        subsampler = undersamplers.ENNWrapper(random_state=42)
+    if subsampler_name == 'TL':
+        subsampler = undersamplers.TomekLinksWrapper(random_state=42)
+
+    subsets = []
+    out_of_subsets = []
+
+    for _ in range(j):
+        subsampler.random_state = np.random.randint(1, 1000)
+
+        subsampler.fit_resample(X_train, y_train)
+
+        all_indices = list(range(len(X_train)))
+        sub_indices = np.sort(subsampler.sample_indices_)
+        oos_indices = np.array([i for i in all_indices if i not in sub_indices])
+
+        X_resampled, y_resampled = X_train.iloc[sub_indices], y_train.iloc[sub_indices]
+        X_out_of_subset, y_out_of_subset = X_train.iloc[oos_indices], y_train.iloc[oos_indices]
+
+        subsets.append((X_resampled, y_resampled))
+        out_of_subsets.append((X_out_of_subset, y_out_of_subset))
+
+    return subsets, out_of_subsets
 
 
 def preprocess(opt, cat_feats, name):
@@ -112,7 +147,10 @@ def preprocess(opt, cat_feats, name):
         name += f"_{opt.undersampling}"
         preprocessor.set_params(**{"categorical_features":len(cat_feats)})
 
+    return (param_grid, steps, name)
 
+
+def clf_LGBM(opt, name):
     if opt.label_smoothing:
         name += "_LS"
         ls = LabelSmoothingLoss()
@@ -121,6 +159,31 @@ def preprocess(opt, cat_feats, name):
     else:
         ls = LabelSmoothingLoss(0, freeze = True)
         clf = LGBM(ls)
+    
+    return (clf, name)
+
+
+def clf_RF(opt, name):
+    if opt.label_smoothing:
+        name += "_LS"
+        ls = LabelSmoothingLoss()
+        clf = CustomRandomForest(ls)
+
+    else:
+        ls = LabelSmoothingLoss(0, freeze = True)
+        clf = CustomRandomForest(ls)
+
+    return (clf, name)
+
+
+def train(opt, param_grid, steps, cat_feats, X_train, y_train, name):
+    if opt.classifier == 'Base':
+        clf, name = clf_LGBM(opt, name)
+    elif opt.classifier == 'RF':
+        clf, name = clf_RF(opt, name)
+    else:
+        print("Wrong classifier name!")
+        sys.exit(-1)
 
     steps = steps + [("clf", clf)]
     for (parameter, values) in clf.parameter_grid().items():
@@ -131,18 +194,19 @@ def preprocess(opt, cat_feats, name):
     else:
         prep_name = None
 
-    return (param_grid, pipeline, prep_name, name)
+    print(param_grid)
 
-
-def train(opt, param_grid, pipeline, prep_name, cat_feats, X_train, y_train):
     is_oversampler = opt.oversampling is not None
     is_undersampler = opt.undersampling is not None
     search = CustomCV(prep_name = prep_name, estimator = pipeline, param_distributions = param_grid,
                       scoring = make_scorer(auc, greater_is_better=True, needs_proba = True), 
                       n_jobs=1, verbose = 2, error_score = "raise", refit = False, cv = 2,
                       oversampler = is_oversampler, undersampler = is_undersampler, n_iter = 10, random_state = 42)
-                      
-    search.fit(X_train, y_train, clf__categorical_features = len(cat_feats))
+    
+    search.fit(X_train, y_train, generate_metadata = opt.ensemble is not None, clf__categorical_features = len(cat_feats))
+
+    print("CV Preds:")
+    print(search.cv_predictions)
 
     return search
 
@@ -160,7 +224,7 @@ def classify(opt, search, X_train, y_train, X_test):
 def main():
     opt = parse_arguments()
 
-    name = "Base"
+    name = opt.classifier
 
     data = utils.fetch_data(opt.dataset)
     X_train, y_train = data["train"]
@@ -179,48 +243,77 @@ def main():
         X_train, y_train = X_train.loc[sub_idx], y_train.loc[sub_idx]
 
     num_iterations = 1
-    if opt.ensemble is not None:
-        num_iterations = opt.ensemble.split('-')[1]
-        opt.undersampling = opt.ensemble.split('-')[0]
+    subsets = [(X_train, y_train)]
+    out_of_subsets = None
 
     classifiers = []
+    metadata_matrix = np.empty((len(X_train),))
 
     start_time = time.time()
     print('Starting training...')
+    
+    if opt.ensemble is not None:
+        num_iterations = int(opt.ensemble.split('-')[1])
+        subsets, out_of_subsets = generate_subsets(X_train, y_train, opt.ensemble.split('-')[0], j=num_iterations)
 
-    for _ in range(num_iterations):
-        it_classifiers = []
-        param_grid, pipeline, prep_name, name = preprocess(opt, cat_feats, name)
+    for i in range(num_iterations):
+        param_grid, steps, name = preprocess(opt, cat_feats, name)
 
-        search = train(opt, param_grid, pipeline, prep_name, cat_feats, X_train, y_train)
-        it_classifiers.append(search)
+        search = train(opt, param_grid, steps, cat_feats, subsets[i][0], subsets[i][1], name)
+        classifiers.append(search)
 
         if opt.ensemble is not None:
-            # TODO: RFs
-            search = train(opt, param_grid, pipeline, prep_name, cat_feats, X_train, y_train)
-            it_classifiers.append(search)
+            y_pred, _, _ = classify(opt, search, subsets[i][0], subsets[i][1], out_of_subsets[i][0])
+            pred = np.hstack((np.array(search.cv_predictions), y_pred))
 
-        classifiers.append(it_classifiers)
+            metadata_matrix = np.vstack((metadata_matrix, np.array(pred)))
 
-    predictions = []
-    probs = []
+        # if opt.ensemble is not None:
+        #     # TODO: RFs
+        #     opt.classifier = 'RF'
+        #     search = train(opt, param_grid, steps, cat_feats, X_train, y_train, name)
+        #     classifiers.append(search)
+        #     metadata_matrix = np.vstack((metadata_matrix, np.array(search.cv_predictions)))
+        #     opt.classifier = 'Base'
+
+
+    if opt.ensemble is not None:
+        metadata_matrix = metadata_matrix[1:].T
+        
+        print("Metadata Shape:")
+        print(metadata_matrix.shape)
+
+        # Train meta-learner
+        meta_learner = meta_learners.fetch_metalearner(opt.ensemble.split('-')[2])
+
+        meta_learner.fit(metadata_matrix, y_train)
+        
+
+    predictions = np.empty((len(X_test),))
+    probs_list = []
     th = 0
     for i in range(num_iterations):
-        y_pred, probs, th = classify(opt, classifiers[i][0], X_train, y_train, X_test)
-        predictions.append(y_pred)
+        y_pred, probs, th = classify(opt, classifiers[i], X_train, y_train, X_test)
+        predictions = np.vstack((predictions, np.array(y_pred)))
+        probs_list.append(probs)
 
-        if opt.ensemble is not None:
-            y_pred, probs, th = classify(opt, classifiers[i][1], X_train, y_train, X_test)
-            predictions.append(y_pred)
+        # if opt.ensemble is not None:
+        #     y_pred, probs, th = classify(opt, classifiers[2*i+1], X_train, y_train, X_test)
+        #     predictions = np.vstack((predictions, np.array(y_pred)))
 
-    # TODO: if opt.ensemble is not None, feed predictions to meta-learner in opt.ensemble.split('-')[2]
+    if opt.ensemble is not None:
+        name = "US-SE_" + opt.ensemble + "_" + name
+        y_pred = meta_learner.predict(predictions[1:].T)
+        probs = meta_learner.predict_proba(predictions[1:].T)[:, 1]
+        print(y_pred[y_test == 0])
+        # th = ?
+    else:
+        y_pred = predictions[1]
+        probs = probs_list[0]
 
     end_time = time.time()
     total_time = end_time - start_time
     print(f'Ended training and classification in {round(total_time, 2)} seconds.\n')
-
-    if opt.ensemble is not None:
-        name = "US-SE_" + opt.ensemble
 
     utils.dump_metrics(y_test, y_pred, probs, name, total_time)
 
