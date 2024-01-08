@@ -7,6 +7,7 @@ import FaissKNN
 from imblearn.utils import check_sampling_strategy
 import pandas as pd
 from scipy.stats import uniform
+from skopt import space
 
 class SMOTEWrapper(SMOTE):
     def __init__(self, categorical_features=0, random_state=42):
@@ -14,8 +15,18 @@ class SMOTEWrapper(SMOTE):
         self.categorical_features = categorical_features
         self.random_state = random_state
         self.kwargs = {}
+        self.sampling_ratio = 1
 
     def fit_resample(self, X, y):
+
+        neg = y[y == 0].shape[0]
+        pos = y[y == 1].shape[0]
+        IR = pos / neg
+        eps = 1 / pos
+
+        #print(f"NN: {self.k_neighbors} \n sampling_ratio: {self.sampling_ratio}")
+        self.sampling_strategy = min(1, IR + self.sampling_ratio * (1 - IR) + eps)
+        #print(f"NN: {self.k_neighbors} \n sampling_strategy: {self.sampling_strategy}")
 
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
@@ -49,7 +60,7 @@ class SMOTEWrapper(SMOTE):
             X_cat_resampled_inv = self.encoder.inverse_transform(X_cat_resampled)
 
             X_resampled = np.concatenate((X_non_cat_resampled, X_cat_resampled_inv), axis=1)
-        
+ 
         return X_resampled, y_resampled
 
     def _generate_samples(self, X, nn_data, nn_num, rows, cols, steps, y=None):
@@ -109,7 +120,7 @@ class SMOTEWrapper(SMOTE):
 
     def parameter_grid(self):
         grid = {
-            'sampling_strategy': uniform(0, 1)
+            'sampling_ratio': ("suggest_uniform", 0.0, 1.0)
         }
         if self.k_neighbors.parameter_grid() is not None:
             for key, value in self.k_neighbors.parameter_grid().items():

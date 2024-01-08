@@ -5,15 +5,15 @@ from sklearn.utils import check_random_state
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.utils.validation import _num_features
 import FaissKNN
-from scipy.stats import uniform
 
 class NCRWrapper(NeighbourhoodCleaningRule):
 
-    def __init__(self, categorical_features=None, random_state=42):
-        super().__init__(n_neighbors = FaissKNN.FaissKNN(), kind_sel = "mode")
+    def __init__(self, categorical_features=None, cls = "majority", random_state=42):
         self.categorical_features = categorical_features
         self.random_state = random_state
+        self.cls = cls
         self.kwargs = {}
+        super().__init__(n_neighbors = FaissKNN.FaissKNN(), kind_sel = "mode", sampling_strategy = cls)
 
     def fit_resample(self, X, y):
         if isinstance(X, pd.DataFrame):

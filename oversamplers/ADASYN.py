@@ -9,6 +9,7 @@ import FaissKNN
 from scipy import sparse
 from imblearn.utils import check_sampling_strategy
 from scipy.stats import uniform
+from skopt import space
 
 class ADASYNWrapper(ADASYN):
 
@@ -17,6 +18,7 @@ class ADASYNWrapper(ADASYN):
         self.categorical_features = categorical_features
         self.random_state = random_state
         self.kwargs = {}
+        self.sampling_ratio =1
 
     def fit_resample(self, X, y):
         if isinstance(X, pd.DataFrame):
@@ -24,6 +26,12 @@ class ADASYNWrapper(ADASYN):
         if isinstance(y, pd.Series):
             y = y.to_numpy()
         
+        neg = y[y == 0].shape[0]
+        pos = y[y == 1].shape[0]
+        IR = pos / neg
+        eps = 1 / pos
+
+        self.sampling_strategy = min(1, IR + self.sampling_ratio * (1 - IR) + eps)
         self.sampling_strategy_ = check_sampling_strategy(self.sampling_strategy, y, "over-sampling")
         
         self.n_features_ = _num_features(X)
@@ -189,7 +197,7 @@ class ADASYNWrapper(ADASYN):
 
     def parameter_grid(self):
         grid = {
-            'sampling_strategy': uniform(0, 1)
+            'sampling_ratio': ("suggest_uniform", 0.0, 1.0)
         }
         if self.n_neighbors.parameter_grid() is not None:
             for key, value in self.n_neighbors.parameter_grid().items():

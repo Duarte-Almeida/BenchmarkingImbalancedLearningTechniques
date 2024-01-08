@@ -7,12 +7,12 @@ import FaissKNN
 
 class ENNWrapper(EditedNearestNeighbours):
 
-    def __init__(self, categorical_features=None, random_state=42):
-        super().__init__(n_neighbors = FaissKNN.FaissKNN(), kind_sel = "mode")
+    def __init__(self, categorical_features=None, cls = "majority", random_state=42):
         self.categorical_features = categorical_features
         self.random_state = random_state
         self.kwargs = {}
-
+        self.cls = cls
+        super().__init__(n_neighbors = FaissKNN.FaissKNN(), kind_sel = "mode", sampling_strategy = cls)
     def _fit_resample(self, X, y):
         self.n_features_ = _num_features(X)
         random_state = check_random_state(self.random_state)

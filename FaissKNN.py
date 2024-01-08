@@ -5,6 +5,7 @@ from sklearn.utils.validation import check_array
 import faiss
 from scipy import sparse
 from scipy.stats import randint
+from skopt import space
 
 class FaissKNN(NeighborsBase, KNeighborsMixin):
 
@@ -88,4 +89,4 @@ class FaissKNN(NeighborsBase, KNeighborsMixin):
         return self
 
     def parameter_grid(self):
-        return {'n_neighbors': randint(2, 10)}
+        return {'n_neighbors': ("suggest_categorical", [i for i in range(2, 8)])}

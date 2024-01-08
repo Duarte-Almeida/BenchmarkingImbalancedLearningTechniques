@@ -1,19 +1,24 @@
 from .racog import RACOG
-from scipy.stats import uniform, loguniform, rv_discrete
+from skopt.space import Real, Integer
+from skopt.space import Dimension
+
 
 class RACOGWrapper(RACOG):
 
         def _fit_resample(self, X, y):
             self.fit(X, y)
+            neg = y[y == 0].shape[0]
+            pos = y[y == 1].shape[0]
+            IR = pos / neg
+            eps = 1 / pos
+
+            self.sampling_strategy = min(1, IR + self.sampling_ratio * (1 - IR) + eps)
             return self.sample(X, y)
         def parameter_grid(self):
-            values = np.arange(50, 500)
-            probabilities = loguniform.cdf(values + 1, 5, 501) - loguniform.cdf(values, 5, 501)
-            probabilities = probabilities / np.sum(probabilities)
             return {
-                'sampling_strategy':uniform(0, 1),
-                'offset': randint(5, 20),
-                'lag0': rv_discrete(values = (values, probabilities))
+                'sampling_ratio': ("suggest_uniform", 0, 1),
+                'offset': ("suggest_categorical", [i for i in range(10, 100)]),
+                'lag0': ("suggest_categorical", [i for i in range(5, 10)])
             }
         def get_params(self, deep=True):
             return {param: getattr(self, param)

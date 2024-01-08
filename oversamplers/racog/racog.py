@@ -114,9 +114,9 @@ class RACOG(BaseOverSampler):
     """
 
     def __init__(self, sampling_strategy='auto', random_state=42, discretization='mdlp', categorical_features='auto',
-                 offset=500, lag=20, root=0, only_sampled = False,
-                 threshold=10, eps=10E-5, verbose=2, shuffle=False, n_jobs=-1):
-
+                 offset=50, lag=20, root=0, only_sampled = False,
+                 threshold=10, eps=10E-5, verbose=2, shuffle=False, n_jobs=1):
+        
         super().__init__(sampling_strategy=sampling_strategy)
         self.random_state = random_state
         self.discretization = discretization
@@ -130,7 +130,6 @@ class RACOG(BaseOverSampler):
 
         self.offset = offset
         self.lag = lag
-        self.n_iter = n_iter
         self.threshold = threshold
         self.eps = eps
 
@@ -212,7 +211,6 @@ class RACOG(BaseOverSampler):
         offset = self.offset
         n_jobs = self.n_jobs
         lag0 = self.lag
-        n_iter = self.n_iter
         X_resampled = np.zeros((0, m), dtype=dtype)
         y_resampled = np.array([])
 
