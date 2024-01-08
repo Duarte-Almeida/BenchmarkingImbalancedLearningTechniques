@@ -7,41 +7,21 @@ import FaissKNN
 import pandas as pd
 from sklearn.exceptions import FitFailedWarning
 from scipy.stats import uniform, loguniform, rv_discrete
+from skopt import space
+from skopt.space.space import Dimension
 
 from scipy.stats import rv_discrete
-
-class DiscreteLogUniform(rv_discrete):
-    """
-    Discrete version of the log uniform distribution.
-    """
+from skopt.space import Dimension
+from scipy.stats import loguniform
+from skopt.space import Real, Integer
     
-    def _pmf(self, k, alpha):
-        """
-        Probability mass function for the discrete log uniform distribution.
-        
-        Parameters:
-        - k: Array-like, integer values at which to compute the PMF.
-        - alpha: Shape parameter (similar to the continuous log uniform distribution).
-        """
-        # Ensure alpha is positive to avoid log(0) or negative values.
-        if alpha <= 0:
-            return np.zeros_like(k, dtype=float)
-        
-        # Calculate PMF
-        #pmf = np.where(k > 1, np.log(k) - np.log(k - 1), 0)
-        #pmf *= alpha / (k * np.log(10))e
-        pmf = loguniform.cdf(k + 1, self.a, self.b) - loguniform.cdf(k, self.a, self.b)
-        pmf = pmf / np.sum(pmf)
-        
-        return pmf
-
-
 class KMeansSMOTEWrapper(KMeansSMOTE):
     def __init__(self, categorical_features = 0, random_state=42):
         super().__init__(k_neighbors = FaissKNN.FaissKNN())
         self.categorical_features = categorical_features
         self.random_state = random_state
         self.kwargs = {}
+        self.sampling_ratio = 1
 
     def fit_resample(self, X, y):
 
@@ -51,6 +31,12 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
             y = y.to_numpy()
         self.n_features_ = _num_features(X)
         random_state = check_random_state(self.random_state)
+        neg = y[y == 0].shape[0]
+        pos = y[y == 1].shape[0]
+        IR = pos / neg
+        eps = 1 / pos
+
+        self.sampling_strategy = min(1, IR + self.sampling_ratio * (1 - IR) + eps)
 
         if self.categorical_features > 0:
 
@@ -69,8 +55,9 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
         try:
             X_resampled, y_resampled = super().fit_resample(X_transformed, y)
         except RuntimeError:
-            print(f"The cluster threshold is {self.cluster_balance_threshold}")
-            raise RuntimeError
+            X_resampled, y_resampled = X_transformed, y
+            #print(f"The cluster threshold is {self.cluster_balance_threshold}")
+            #raise RuntimeError
 
         if self.categorical_features > 0:
             X_cat_resampled = X_resampled[:, -X_cat.shape[1]:]
@@ -142,13 +129,13 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
         return self
 
     def parameter_grid(self):
-        values = np.arange(5, 500)
-        probabilities = loguniform.cdf(values + 1, 5, 501) - loguniform.cdf(values, 5, 501)
-        probabilities = probabilities / np.sum(probabilities)
+        #values = np.arange(5, 500)
+        #probabilities = loguniform.cdf(values + 1, 5, 501) - loguniform.cdf(values, 5, 501)
+        #probabilities = probabilities / np.sum(probabilities)
         grid = {
-            'sampling_strategy': uniform(0, 1),
-            'cluster_balance_threshold': loguniform(0.001, 0.1),
-            'kmeans_estimator': rv_discrete(values = (values, probabilities))
+            'sampling_ratio': ("suggest_uniform", 0.0, 1.0),
+            'cluster_balance_threshold': ("suggest_loguniform", 0.001, 0.2),
+            'kmeans_estimator': ("suggest_categorical", [i for i in range(5, 500)])
         }
         if self.k_neighbors.parameter_grid() is not None:
             for key, value in self.k_neighbors.parameter_grid().items():

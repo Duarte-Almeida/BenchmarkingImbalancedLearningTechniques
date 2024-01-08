@@ -11,16 +11,18 @@ from sklearn.model_selection import StratifiedKFold
 import copy
 import matplotlib.pyplot as plt
 import sys
+from skopt import space
 
-class IRWrapper(InstanceHardnessThreshold):
+class IHTWrapper(InstanceHardnessThreshold):
 
-    def __init__(self, categorical_features=None, estimator=None, random_state=42):
+    def __init__(self, categorical_features=None, cls = "majority", estimator=None, random_state=42):
         super().__init__()
         self.categorical_features = categorical_features
         self.random_state = random_state
         self.kwargs = {}
         self.estimator = estimator
         self.cv = 3
+        self.cls = cls
 
     def fit_resample(self, X, y):
 
@@ -31,19 +33,49 @@ class IRWrapper(InstanceHardnessThreshold):
 
         skf = StratifiedKFold(n_splits=self.cv)
         probs = np.zeros_like(y, dtype = float)
-        #print(self.estimator)
+
         for i, (train_index, test_index) in enumerate(skf.split(X, y)):
             self.estimator.fit(X[train_index], y[train_index])
             probs += self.estimator.predict_proba(X)[:, 1]
         probs /= self.cv
 
-        # get the 1 - alpha probability quantile
-        num_neg = y[y == 0].shape[0]
-        num_pos =  y[y == 1].shape[0]      
+        neg = y[y == 0].shape[0]
+        pos = y[y == 1].shape[0]
+        IR = pos / neg
+        eps = 1 / pos
 
-        prob = num_pos / (num_neg * self.sampling_strategy)
-        quantile = np.quantile(probs[y == 0], prob)
-        print(f"Which corresponds to quantile {quantile}")
+        rng = np.random.default_rng(self.random_state)   
+
+        if self.cls == "majority":
+            self.sampling_strategy = min(1, IR + self.sampling_strategy * (1 - IR) + eps)
+            num_samples = int(pos / self.sampling_strategy)
+            prob = num_samples / neg
+            quantile = np.quantile(probs[y == 0], prob)
+            pos_idx = np.where(y == 1)[0]
+            neg_idx = np.where((y == 0) & (probs <= quantile))[0]
+            idx = np.concatenate((neg_idx, pos_idx))
+            self.sample_indices_ = idx
+            return X[idx], y[idx]
+            
+        else:
+            self.sampling_strategy = min(1, self.sampling_strategy + eps)
+            num_samples_pos = int(pos * self.sampling_strategy)
+            num_samples_neg = int(neg * self.sampling_strategy)
+
+            neg_idx = np.where(y == 0)[0]
+            pos_idx = np.where(y == 1)[0]
+
+            pos_prob = num_samples_pos / pos
+            pos_quantile = np.quantile(probs[y == 1], pos_prob)
+
+            neg_prob = num_samples_neg / neg
+            neg_quantile = np.quantile(probs[y == 0], neg_prob)
+
+            pos_idx = np.where((y == 1) & (probs <= pos_quantile))[0]
+            neg_idx = np.where((y == 0) & (probs <= neg_quantile))[0]
+            idx = np.concatenate((neg_idx, pos_idx))
+            self.sample_indices_ = idx
+            return X[idx], y[idx]
 
         # remove most difficult majority instances
         idx = np.where((y == 1) | ((y == 0) & (probs <= quantile)))[0]
@@ -79,7 +111,7 @@ class IRWrapper(InstanceHardnessThreshold):
 
     def parameter_grid(self):
         grid = {
-            'sampling_strategy': uniform(0, 1)
+            'sampling_strategy': ("suggest_uniform", 0.0, 1.0),
         }
 
         return grid
