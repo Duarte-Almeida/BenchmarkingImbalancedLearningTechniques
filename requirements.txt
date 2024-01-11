@@ -1,7 +1,8 @@
 numpy==1.21.6
 Cython==0.29.24
 caimcaim==0.3
-faiss==1.5.3
+faiss-cpu==1.7.4
+gym==0.26.2
 imbalanced_learn==0.11.0
 imblearn==0.0
 kaggle==1.5.16
@@ -12,4 +13,6 @@ pandas==1.3.5
 pomegranate
 scikit-learn==1.0.2
 scipy==1.7.3
+self-paced-ensemble==0.1.6
+torch==1.13.1
 tqdm==4.64.1

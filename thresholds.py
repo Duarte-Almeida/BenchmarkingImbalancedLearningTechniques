@@ -8,6 +8,12 @@ def compute_cutoff(y_test, y_pred):
     J_statistic = tpr + 1 - fpr
     return th[np.argmax(J_statistic)]
 
+def compute_threshold_at_fpr(y_test, y_pred):
+    target_fpr = 0.15
+
+    fpr, tpr, thresholds = sklearn.metrics.roc_curve(y_test, y_pred)
+    idx = np.argmin(np.abs(fpr - target_fpr))
+    return thresholds[idx]
 
 def compute_cs_threshold(y_test, y_pred):
     """
@@ -51,10 +57,15 @@ def compute_cs_threshold(y_test, y_pred):
     print(f"Best Cost Matrix = {best_cost_matrix}")
     return best_threshold
 
+def compute_standard(y_test, y_pred):
+    return 0.5
+
 
 threshold_names = {
+    'CS':compute_cs_threshold,
+    'FPR':compute_threshold_at_fpr,
     'ROC':compute_cutoff,
-    'CS':compute_cs_threshold
+    'STD':compute_standard
 }
 
 def fetch_threshold(name, y_test, y_pred):

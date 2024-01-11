@@ -10,6 +10,7 @@ import undersamplers
 import hybrid
 import meta_learners
 import thresholds
+import ensembles
 from losses import LabelSmoothingLoss, FocalLoss
 from classifiers import LGBM
 from classifiers import CustomRandomForest
@@ -19,6 +20,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import scipy
+import random
 from sklearn.model_selection import GridSearchCV
 from sklearn.base import clone
 from sklearn.utils import _print_elapsed_time
@@ -64,7 +66,7 @@ def parse_arguments():
                         action="store_true",
                         help="Should we perform label smoothing?")
     parser.add_argument('-threshold', default = 'ROC',
-                        choices=['CS', 'ROC'],
+                        choices=['CS', 'FPR', 'ROC', 'STD'],
                         help="Which threshold-moving strategy should we choose?")
     
     return parser.parse_args()
@@ -203,7 +205,8 @@ def train(opt, param_grid, steps, cat_feats, X_train, y_train, name):
                       n_jobs=1, verbose = 2, error_score = "raise", refit = False, cv = 2,
                       oversampler = is_oversampler, undersampler = is_undersampler, n_iter = 10, random_state = 42)
     
-    search.fit(X_train, y_train, generate_metadata = opt.ensemble is not None, clf__categorical_features = len(cat_feats))
+    search.fit(X_train, y_train, generate_metadata = opt.ensemble is not None and opt.ensemble.split('-')[0] == 'SE',
+               clf__categorical_features = len(cat_feats))
 
     print("CV Preds:")
     print(search.cv_predictions)
@@ -211,14 +214,40 @@ def train(opt, param_grid, steps, cat_feats, X_train, y_train, name):
     return search
 
 
-def classify(opt, search, X_train, y_train, X_test):
+def classify(opt, search, X_train, y_train, X_test, name):
     probs = search.predict_proba(X_test)[:, 1]
     train_probs = search.predict_proba(X_train)[:, 1]
 
     th = thresholds.fetch_threshold(opt.threshold, y_train, train_probs)
-    y_pred = search.best_estimator_.predict(X_test, **{"th":th})
+
+    if hasattr(search, 'best_estimator_') and search.best_estimator_ is not None:
+        y_pred = search.best_estimator_.predict(X_test, **{"th":th})
+    else:
+        y_pred = search.predict(X_test, **{"th":th})
+
+    if opt.threshold != 'ROC':
+        name += '_' + opt.threshold
 
     return (y_pred, probs, th)
+
+
+def finish(opt, start_time, y_test, y_pred, probs, th, name):
+    end_time = time.time()
+    total_time = end_time - start_time
+    print(f'Ended training and classification in {round(total_time, 2)} seconds.\n')
+
+    utils.dump_metrics(y_test, y_pred, probs, name, total_time)
+
+    if opt.plot_scores:
+        positives = probs[y_test == 1]
+        negatives = probs[y_test == 0]
+        plt.hist(probs[y_test == 1], bins = 100, range = (0, 1), label = "Positive", alpha = 0.5, weights = np.ones_like(positives)/float(len(positives)))
+        plt.hist(probs[y_test == 0], bins = 100, range = (0, 1), label = "Negative", alpha = 0.5, weights = np.ones_like(negatives)/float(len(negatives)))
+        plt.axvline(x = th, alpha = 0.5, color = "red", linestyle = "--", linewidth = 1)
+        plt.legend(loc='upper right')
+        plt.show()
+
+    return
 
 
 def main():
@@ -233,6 +262,7 @@ def main():
     cat_feats = data["cat_feats"]
 
     np.random.seed(42)
+    random.seed(42)
     X_train = X_train.reset_index(drop = True)
     y_train = y_train.reset_index(drop = True)
 
@@ -253,8 +283,40 @@ def main():
     print('Starting training...')
     
     if opt.ensemble is not None:
-        num_iterations = int(opt.ensemble.split('-')[1])
-        subsets, out_of_subsets = generate_subsets(X_train, y_train, opt.ensemble.split('-')[0], j=num_iterations)
+        if opt.ensemble.split('-')[0] == 'SE':
+            num_iterations = int(opt.ensemble.split('-')[2])
+            subsets, out_of_subsets = generate_subsets(X_train, y_train, opt.ensemble.split('-')[1], j=num_iterations)
+        elif opt.ensemble.split('-')[0] == 'Mesa':
+            name = opt.ensemble.split('-')[0] + "_Base"
+            clf, name = clf_LGBM(opt, name)
+
+            valid_rate = int(len(X_train) * 0.05)
+
+            X_valid = X_train[:valid_rate].reset_index(drop = True)
+            y_valid = y_train[:valid_rate].reset_index(drop = True)
+
+            X_train = X_train[valid_rate:].reset_index(drop = True)
+            y_train = y_train[valid_rate:].reset_index(drop = True)
+
+            mesa = ensembles.fetch_ensemble(opt.ensemble.split('-')[0], estimator=clf, random_state=42)
+            # mesa.meta_fit(X_train=X_train, y_train=y_train, X_valid=X_valid, y_valid=y_valid)
+
+            mesa.fit(X=X_train, y=y_train, X_valid=X_valid, y_valid=y_valid)
+
+            y_pred, probs, th = classify(opt, mesa, X_train, y_train, X_test, name)
+            finish(opt, start_time, y_test, y_pred, probs, th, name)
+            return
+        else:
+            name = opt.ensemble.split('-')[0] + "_Base"
+            clf, name = clf_LGBM(opt, name)
+
+            ensemble_clf = ensembles.fetch_ensemble(opt.ensemble.split('-')[0], estimator=clf)
+            ensemble_clf.fit(X_train, y_train)
+
+            y_pred, probs, th = classify(opt, ensemble_clf, X_train, y_train, X_test, name)
+            finish(opt, start_time, y_test, y_pred, probs, th, name)
+            return
+
 
     for i in range(num_iterations):
         param_grid, steps, name = preprocess(opt, cat_feats, name)
@@ -262,14 +324,13 @@ def main():
         search = train(opt, param_grid, steps, cat_feats, subsets[i][0], subsets[i][1], name)
         classifiers.append(search)
 
-        if opt.ensemble is not None:
-            y_pred, _, _ = classify(opt, search, subsets[i][0], subsets[i][1], out_of_subsets[i][0])
+        if opt.ensemble is not None and opt.ensemble.split('-')[0] == 'SE':
+            y_pred, _, _ = classify(opt, search, subsets[i][0], subsets[i][1], out_of_subsets[i][0], name)
             pred = np.hstack((np.array(search.cv_predictions), y_pred))
 
             metadata_matrix = np.vstack((metadata_matrix, np.array(pred)))
 
-        # if opt.ensemble is not None:
-        #     # TODO: RFs
+        # if opt.ensemble is not None and opt.ensemble.split('-')[0] == 'SE':
         #     opt.classifier = 'RF'
         #     search = train(opt, param_grid, steps, cat_feats, X_train, y_train, name)
         #     classifiers.append(search)
@@ -277,14 +338,14 @@ def main():
         #     opt.classifier = 'Base'
 
 
-    if opt.ensemble is not None:
+    if opt.ensemble is not None and opt.ensemble.split('-')[0] == 'SE':
         metadata_matrix = metadata_matrix[1:].T
         
         print("Metadata Shape:")
         print(metadata_matrix.shape)
 
         # Train meta-learner
-        meta_learner = meta_learners.fetch_metalearner(opt.ensemble.split('-')[2])
+        meta_learner = meta_learners.fetch_metalearner(opt.ensemble.split('-')[3])
 
         meta_learner.fit(metadata_matrix, y_train)
         
@@ -293,38 +354,24 @@ def main():
     probs_list = []
     th = 0
     for i in range(num_iterations):
-        y_pred, probs, th = classify(opt, classifiers[i], X_train, y_train, X_test)
+        y_pred, probs, th = classify(opt, classifiers[i], X_train, y_train, X_test, name)
         predictions = np.vstack((predictions, np.array(y_pred)))
         probs_list.append(probs)
 
-        # if opt.ensemble is not None:
-        #     y_pred, probs, th = classify(opt, classifiers[2*i+1], X_train, y_train, X_test)
+        # if opt.ensemble is not None and opt.ensemble.split('-')[0] == 'SE':
+        #     y_pred, probs, th = classify(opt, classifiers[2*i+1], X_train, y_train, X_test, name)
         #     predictions = np.vstack((predictions, np.array(y_pred)))
 
-    if opt.ensemble is not None:
-        name = "US-SE_" + opt.ensemble + "_" + name
+    if opt.ensemble is not None and opt.ensemble.split('-')[0] == 'SE':
+        name = opt.ensemble + "_" + name
         y_pred = meta_learner.predict(predictions[1:].T)
         probs = meta_learner.predict_proba(predictions[1:].T)[:, 1]
-        print(y_pred[y_test == 0])
         # th = ?
     else:
         y_pred = predictions[1]
         probs = probs_list[0]
 
-    end_time = time.time()
-    total_time = end_time - start_time
-    print(f'Ended training and classification in {round(total_time, 2)} seconds.\n')
-
-    utils.dump_metrics(y_test, y_pred, probs, name, total_time)
-
-    if opt.plot_scores:
-        positives = probs[y_test == 1]
-        negatives = probs[y_test == 0]
-        plt.hist(probs[y_test == 1], bins = 100, range = (0, 1), label = "Positive", alpha = 0.5, weights = np.ones_like(positives)/float(len(positives)))
-        plt.hist(probs[y_test == 0], bins = 100, range = (0, 1), label = "Negative", alpha = 0.5, weights = np.ones_like(negatives)/float(len(negatives)))
-        plt.axvline(x = th, alpha = 0.5, color = "red", linestyle = "--", linewidth = 1)
-        plt.legend(loc='upper right')
-        plt.show()
+    finish(opt, start_time, y_test, y_pred, probs, th, name)
 
 
 if __name__ == '__main__':
