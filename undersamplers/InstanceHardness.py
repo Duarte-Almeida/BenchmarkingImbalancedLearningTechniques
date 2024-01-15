@@ -23,6 +23,7 @@ class IHTWrapper(InstanceHardnessThreshold):
         self.estimator = estimator
         self.cv = 3
         self.cls = cls
+        self.sampling_ratio = 1.0
 
     def fit_resample(self, X, y):
 
@@ -47,8 +48,8 @@ class IHTWrapper(InstanceHardnessThreshold):
         rng = np.random.default_rng(self.random_state)   
 
         if self.cls == "majority":
-            self.sampling_strategy = min(1, IR + self.sampling_strategy * (1 - IR) + eps)
-            num_samples = int(pos / self.sampling_strategy)
+            self.sampling_strategy = min(1, IR + self.sampling_ratio * (1 - IR) + eps)
+            num_samples = int(pos / self.sampling_ratio)
             prob = num_samples / neg
             quantile = np.quantile(probs[y == 0], prob)
             pos_idx = np.where(y == 1)[0]
@@ -58,7 +59,7 @@ class IHTWrapper(InstanceHardnessThreshold):
             return X[idx], y[idx]
             
         else:
-            self.sampling_strategy = min(1, self.sampling_strategy + eps)
+            self.sampling_strategy = min(1, (1 - self.sampling_ratio) + eps)
             num_samples_pos = int(pos * self.sampling_strategy)
             num_samples_neg = int(neg * self.sampling_strategy)
 
@@ -66,12 +67,12 @@ class IHTWrapper(InstanceHardnessThreshold):
             pos_idx = np.where(y == 1)[0]
 
             pos_prob = num_samples_pos / pos
-            pos_quantile = np.quantile(probs[y == 1], pos_prob)
+            pos_quantile = np.quantile(probs[y == 1], 1 - pos_prob)
 
             neg_prob = num_samples_neg / neg
             neg_quantile = np.quantile(probs[y == 0], neg_prob)
 
-            pos_idx = np.where((y == 1) & (probs <= pos_quantile))[0]
+            pos_idx = np.where((y == 1) & (probs >= pos_quantile))[0]
             neg_idx = np.where((y == 0) & (probs <= neg_quantile))[0]
             idx = np.concatenate((neg_idx, pos_idx))
             self.sample_indices_ = idx
@@ -111,7 +112,10 @@ class IHTWrapper(InstanceHardnessThreshold):
 
     def parameter_grid(self):
         grid = {
-            'sampling_strategy': ("suggest_uniform", 0.0, 1.0),
+            'sampling_ratio': ("suggest_uniform", 0.0, 0.1),
         }
 
         return grid
+    
+    def adapt_hyperparameters(self, X, y):
+        pass

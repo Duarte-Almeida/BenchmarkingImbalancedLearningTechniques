@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import uniform
 
 class FocalLoss:
-    ''' source: https://maxhalford.github.io/blog/lightgbm-focal-loss/
+    ''' 
+    source: https://maxhalford.github.io/blog/lightgbm-focal-loss/
     ''' 
 
     def __init__(self, gamma = 1, alpha=None):
@@ -17,7 +18,6 @@ class FocalLoss:
         self.count = 0
         self.grid = {
             'gamma': ("suggest_uniform", 0.0, 2.0),
-            'alpha': ("suggest_uniform", 1.0, 1000.0)
         }
 
     def at(self, y):
@@ -64,11 +64,8 @@ class FocalLoss:
         return log_odds
 
     def obj(self, train_data, preds):
-        #print(preds)
         y = train_data
         p = special.expit(preds)
-        #print(self.grad(y, p).mean())
-        #print(self.hess(y, p).mean())
         return (self.grad(y, p), self.hess(y, p))
 
     def eval(self, train_data, preds):
@@ -79,9 +76,7 @@ class FocalLoss:
         return ('focal_loss', self(y, p).mean(), is_higher_better)
 
     def adapt_hyperparameters(self, X, y):
-        IR = y[y == 0].shape[0] / y[y == 1].shape[0]
-        self.grid["alpha"] = ("suggest_uniform", 1.0, max(1, float(np.sqrt(IR))))
-        #pass
+        pass
     
     def set_params(self, **params):
         if not params:

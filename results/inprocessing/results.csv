@@ -1,4 +1,0 @@
-type,name,Precision,Recall,F1 score,False Positive Rate,False Negative Rate,AUC,Train time,Test time
-Losses,FocalLoss,0.1041,0.5292,0.1739,0.0486,0.4708,0.8911,3358.88,0.74
-Losses,CrossEntropy,0.1049,0.5244,0.1749,0.0477,0.4756,0.8909,3206.89,0.69
-Losses,GradientHarmonized,0.1046,0.5301,0.1747,0.0484,0.4699,0.8923,3890.12,2.89

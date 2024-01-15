@@ -1,0 +1,3 @@
+type,name,Precision,Recall,F1 score,False Positive Rate,False Negative Rate,AUC,Train time,Test time
+Base,Base,0.5734,0.785,0.6627,0.0496,0.215,0.9382,134.67,1.52
+Undersamplers,RUS,0.5685,0.7695,0.6539,0.0496,0.2305,0.9386,166.51,2.63

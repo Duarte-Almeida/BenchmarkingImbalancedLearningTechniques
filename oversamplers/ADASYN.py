@@ -197,13 +197,16 @@ class ADASYNWrapper(ADASYN):
 
     def parameter_grid(self):
         grid = {
-            'sampling_ratio': ("suggest_uniform", 0.0, 1.0)
+            'sampling_ratio': ("suggest_uniform", 0.0, 0.1)
         }
         if self.n_neighbors.parameter_grid() is not None:
             for key, value in self.n_neighbors.parameter_grid().items():
                 grid['n_neighbors__' + key] = value
 
         return grid
+    
+    def adapt_hyperparameters(self, X, y):
+        pass
 
 
 

@@ -67,3 +67,6 @@ class ENNWrapper(EditedNearestNeighbours):
                 grid['n_neighbors__' + key] = value
 
         return grid
+    
+    def adapt_hyperparameters(self, X, y):
+        pass

@@ -85,3 +85,5 @@ class IPFWrapper(BaseEstimator, ClassifierMixin):
             'k': ("suggest_categorical", [i for i in range(3, 5)]),
             'p': ("suggest_uniform", 0.05, 0.2)
         }
+    def adapt_hyperparameters(self, X, y):
+        pass

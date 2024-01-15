@@ -10,7 +10,9 @@ import oversamplers
 import undersamplers
 import thresholds
 import losses
-from classifiers import LGBM
+import classifiers
+import ensembles
+#from classifiers import LGBM, StackedEnsemble
 from CustomCV import CustomCV
 
 import lightgbm as lgb
@@ -25,17 +27,20 @@ from imblearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
 import sklearn.model_selection
 from sklearn import metrics
+from TabNetSelfSupervised import TabNetSelfSupervised
 
 import matplotlib.pyplot as plt
+import torch
 
 
 def auc(y_test, y_pred):    
     return sklearn.metrics.roc_auc_score(y_test, y_pred)
 
 def main():
+    device = torch.device('cpu')
     parser = argparse.ArgumentParser()
     parser.add_argument('-dataset',
-                        choices=['baf'],
+                        choices=['baf', 'ieee', 'mlg', 'sparkov'],
                         help="Which dataset should we choose?")
     parser.add_argument('-data_subsampling', default = 1.00,
                         type = float,
@@ -49,13 +54,12 @@ def main():
     parser.add_argument('-hybrid', default = None,
                         choices=["majority", "all"],
                         help="Which hybrid oversampling/undersammpling strategy should we choose?")
-    parser.add_argument('-label_smoothing', default = False,
-                        action="store_true",
-                        help="Should we perform label smoothing?")
-    parser.add_argument('-clf', default = "base",
+    parser.add_argument('-clf', default = "Base",
+                        choices = ["Base", "StackedEnsemble"],
                         help="Which classifier should we use?")
     parser.add_argument('-loss', default = None,
-                        choices = ["CrossEntropy", "FocalLoss", "GradientHarmonized"],
+                        choices = ["WeightedCrossEntropy", "LabelSmoothing", "LabelRelaxation", 
+                                   "FocalLoss", "GradientHarmonized"],
                         help="Which loss function should we use?")
     parser.add_argument('-plot_scores', default = False,
                         action="store_true",
@@ -63,7 +67,33 @@ def main():
     parser.add_argument('-threshold', default = 'FPR',
                         choices=['CS', 'J', 'FPR'],
                         help="Which threshold-moving strategy should we choose?")
-    
+    parser.add_argument('-simplified', action='store_true',
+                        help="Should we consider a simplified base model")
+    parser.add_argument('-ensemble', default = None,
+                        choices=['StackedEnsemble', "EasyEnsemble", "SelfPaced", "MESA"],
+                        help="Which ensembling strategy should we apply?")
+    parser.add_argument('-n_iter', default = 50, type = int)
+    parser.add_argument('-self_supervised', default = False,
+                        action="store_true",
+                        help="Should we use the self supervised representation?")
+
+    #tb = TabNetSelfSupervised()
+    #tb.fit(X_train, [i for i in range(X_train.shape[1] - len(cat_feats), X_train.shape[1])])
+    #res_train = tb.transform(X_train)
+    #res_test = tb.transform(X_test)
+    #print(res_train.shape)
+    #print(res_test.shape)
+    #with open("res_train.npy", "wb") as fp:
+    #    np.save(fp, res_train)
+    #with open("res_test.npy", "wb") as fp:
+    #    np.save(fp, res_test)
+    #sys.exit()
+
+    #with open("res_train.npy", "rb") as fp:
+    #    X_train = np.load(fp)
+    #with open("res_test.npy", "rb") as fp:
+    #    X_test = np.load(fp)
+    #cat_feats = []
     opt = parser.parse_args()
 
     name = "Base"
@@ -75,19 +105,17 @@ def main():
     cat_feats = data["cat_feats"]
 
     np.random.seed(42)
-    X_train = X_train.reset_index(drop = True)
-    y_train = y_train.reset_index(drop = True)
     if opt.data_subsampling < 1.00:
-        X_train = X_train.reset_index(drop = True)
-        y_train = y_train.reset_index(drop = True)
         sub_idx = np.random.choice(X_train.shape[0], size = int(X_train.shape[0] * opt.data_subsampling), replace = False)
-        X_train, y_train = X_train.loc[sub_idx], y_train.loc[sub_idx]
+        X_train = X_train[sub_idx]
+        y_train = y_train[sub_idx]
 
     steps = []
-    clf_steps = []
     param_grid = {}
-    prep_param_grid = {}
+
     c_time = None
+
+    # TODO: see this??
     configs = []
 
     if opt.oversampling is not None and opt.undersampling is not None and opt.hybrid is None:
@@ -100,11 +128,11 @@ def main():
         if opt.hybrid is not None and os.path.exists(f"config/{opt.oversampling}.pkl") \
                                   and os.path.exists(f"info/{opt.oversampling}.pkl"):
             print(f"Fetching oversamplier model best configuration...")
-            with open(f"config/{opt.oversampling}.pkl", "rb") as fp:
+            with open(f"config/{opt.dataset}/{opt.oversampling}.pkl", "rb") as fp:
                 oversampler_config = pickle.load(fp)
             print(f"Config: {oversampler_config}")
             
-            with open(f"info/{opt.oversampling}.pkl", "rb") as fp:
+            with open(f"info/{opt.dataset}/{opt.oversampling}.pkl", "rb") as fp:
                 oversampler_info = pickle.load(fp)
                 print(f"Adding {oversampler_info['time']} to training time")
                 c_time = oversampler_info["time"]
@@ -113,7 +141,7 @@ def main():
         else:
             if oversampler.parameter_grid() is not None:
                 for (parameter, values) in oversampler.parameter_grid().items():
-                    prep_param_grid["oversampler__" + str(parameter)] = values
+                    param_grid["oversampler__" + str(parameter)] = values
 
         name += f"_{opt.oversampling}"
         if name.startswith("Base"):
@@ -126,7 +154,7 @@ def main():
 
         if undersampler.parameter_grid() is not None:
             for (parameter, values) in undersampler.parameter_grid().items():
-                prep_param_grid["undersampler__" + str(parameter)] = values
+                param_grid["undersampler__" + str(parameter)] = values
         name += f"_{opt.undersampling}"
         if name.startswith("Base"):
             name = name[5:]
@@ -140,8 +168,12 @@ def main():
         undersampler.set_params(**{"cls":opt.hybrid})
         if opt.hybrid == "all":
             name += "_all"
-       
-    clf = LGBM()
+    
+    clf = classifiers.fetch_clf(opt.clf)
+    if opt.simplified:
+        name += "_simplified"
+        clf.simplify_model()
+    clf.set_params(**{"categorical_features":len(cat_feats)})
 
     if opt.loss is not None:
         loss = losses.fetch_loss(opt.loss)
@@ -150,25 +182,24 @@ def main():
             name = name[5:]
         clf.set_params(**{"loss_fn": loss})
         clf.untoggle_param_grid("loss")
-    else:
-        loss = LGBM().loss_fn
-    
-    if opt.label_smoothing:
-        name += "_LS"
+
+    if opt.ensemble is not None:
+        ens = ensembles.fetch_ensemble(opt.ensemble)
+        name += f"_{opt.ensemble}"
+        ens.set_params(**{"base_estimator": clf})
         if name.startswith("Base"):
             name = name[5:]
-        loss.set_params(**{"smooth": True})
-
-    steps = steps + [("clf", clf)]
-    if name == "Base":
-        clf.untoggle_param_grid("clf")
-    clf_steps = clf_steps + [("clf", clf)]
-    for (parameter, values) in clf.parameter_grid().items():
-        param_grid["clf__" + str(parameter)] = values
-    clf.set_params(**{"categorical_features":len(cat_feats)})
+        steps = steps + [("ens", ens)]
+        for (parameter, values) in ens.parameter_grid().items():
+            param_grid["ens__" + str(parameter)] = values
+    else:
+        if name.startswith("Base"):
+            clf.untoggle_param_grid("clf")
+        steps = steps + [("clf", clf)]
+        for (parameter, values) in clf.parameter_grid().items():
+            param_grid["clf__" + str(parameter)] = values
     
     pipeline = Pipeline(steps=steps)
-    clf_pipeline = Pipeline(steps = clf_steps)
 
     start_time = time.time()
     if c_time is not None:
@@ -176,50 +207,40 @@ def main():
     for config in configs:
         pipeline.set_params(**config)
     
-    print(f"Here is my grid: {prep_param_grid}")
-
     # To do hyperparameter search step by step we must first have a defined classifier
-    if name != "Base" and os.path.exists("config/Base.pkl") and os.path.exists("info/Base.pkl"):
+    if name != "Base" and os.path.exists(f"config/{opt.dataset}/Base.pkl") and os.path.exists(f"info/{opt.dataset}/Base.pkl"):
         print(f"Fetching base model best configuration...")
-        with open("config/Base.pkl", "rb") as fp:
+        with open(f"config/{opt.dataset}/Base.pkl", "rb") as fp:
             base_config = pickle.load(fp)
         
-        with open("info/Base.pkl", "rb") as fp:
+        with open(f"info/{opt.dataset}/Base.pkl", "rb") as fp:
             base_info = pickle.load(fp)
             print(f"Adding {base_info['time']} to training time")
             start_time -= base_info["time"]
-        #clf.set_params(**base_config)
-        clf_pipeline.set_params(**base_config)
-        pipeline.set_params(**base_config)
+        clf.set_params(**{key[len("clf__"):]: value for (key, value) in base_config.items()})
+        print(f"After fetching base classifier it had parameters: {clf.get_params()}")
     elif name != "Base":
-        print(f"Base model best configuration not found. Training base model...")
-        search_clf = CustomCV(estimator = pipeline, 
-                      param_distributions = param_grid,
-                      scoring = make_scorer(auc, greater_is_better=True, needs_proba = True), 
-                      n_jobs=1, verbose = 2, cv = 2, error_score = 0,
-                      n_iter = 100, random_state = 42)
-        clf = search_clf.fit(X_train, y_train)
+        print(f"Base model best configuration not found. Train base model first.")
+        sys.exit()
+
     
     if "undersampler" in pipeline.named_steps:
         pipeline.named_steps["undersampler"].set_params(**{"estimator": clf})
 
-    search = CustomCV(clf = clf_pipeline,
-                      estimator = pipeline, 
+    search = CustomCV(estimator = pipeline, 
                       param_distributions = param_grid, 
-                      n_iter = 20 * len(param_grid.keys()),
-                      prep_param_distributions = prep_param_grid,
-                      prep_n_iter = 20 * len(prep_param_grid.keys()),
-                      scoring = make_scorer(auc, greater_is_better=True, needs_proba = True), 
-                      n_jobs=1, verbose = 2, cv = 2, error_score = 0, random_state = 42)
+                      n_iter = opt.n_iter,
+                      )
                       
     est = search.fit(X_train, y_train)
     end_time = time.time()
 
     test_start = time.time()
     probs = est.predict_proba(X_test)[:, 1]
-    train_probs = est.predict_proba(X_train)[:, 1]
+    #train_probs = est.predict_proba(X_train)[:, 1]
 
-    th = search.th#thresholds.fetch_threshold(opt.threshold, y_train, train_probs)
+    #th = search.th#thresholds.fetch_threshold(opt.threshold, y_train, train_probs)
+    th = thresholds.compute_FPR_cutoff(y_test, probs)
     y_pred = est.predict(X_test, **{"th":th})
     test_end = time.time()
     test_time = test_end - test_start
@@ -228,7 +249,7 @@ def main():
     print(f'Ended training and classification in {round(total_time + test_time, 2)} seconds.\n')
     
     # TODO: add more conditions in the future
-    if opt.loss is None:
+    if opt.loss is None and opt.ensemble is None:
         metric_file = "preprocessing"
     
         subtype = "Base"
@@ -240,16 +261,17 @@ def main():
 
         if opt.oversampling and opt.undersampling:
             subtype = "Hybrid"
-        
-        if opt.label_smoothing:
-            subtype = "Label Smoothing"
+
     else:
         metric_file = "inprocessing"
 
-        # TODO: add more subtypes in the future 
-        subtype = "Losses"
+        if opt.loss is not None:
+            subtype = "Losses"
+        
+        if opt.ensemble is not None:
+            subtype = "Ensembles"
 
-    utils.dump_metrics(y_test, y_pred, probs, name, total_time, test_time, metric_file, subtype, search.best_params_)
+    utils.dump_metrics(y_test, y_pred, probs, name, total_time, test_time, metric_file, subtype, search.best_params_, opt.dataset)
 
     if opt.plot_scores:
         positives = probs[y_test == 1]
@@ -258,7 +280,7 @@ def main():
         plt.hist(probs[y_test == 0], bins = 100, range = (0, 1), label = "Negative", alpha = 0.5, weights = np.ones_like(negatives)/float(len(negatives)))
         plt.axvline(x = th, alpha = 0.5, color = "red", linestyle = "--", linewidth = 1)
         plt.legend(loc='upper right')
-        results_dir = f'results/{metric_file}/{name}/'
+        results_dir = f'results/{opt.dataset}/{metric_file}/{name}/'
         os.makedirs(results_dir, exist_ok=True)
         plt.savefig(os.path.join(results_dir, f'{name}_probs.pdf'))
 

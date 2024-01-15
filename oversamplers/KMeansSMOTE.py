@@ -129,11 +129,9 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
         return self
 
     def parameter_grid(self):
-        #values = np.arange(5, 500)
-        #probabilities = loguniform.cdf(values + 1, 5, 501) - loguniform.cdf(values, 5, 501)
-        #probabilities = probabilities / np.sum(probabilities)
+
         grid = {
-            'sampling_ratio': ("suggest_uniform", 0.0, 1.0),
+            'sampling_ratio': ("suggest_uniform", 0.0, 0.1),
             'cluster_balance_threshold': ("suggest_loguniform", 0.001, 0.2),
             'kmeans_estimator': ("suggest_categorical", [i for i in range(5, 500)])
         }
@@ -142,4 +140,6 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
                 grid['k_neighbors__' + key] = value
 
         return grid
+    def adapt_hyperparameters(self, X, y):
+        pass
 

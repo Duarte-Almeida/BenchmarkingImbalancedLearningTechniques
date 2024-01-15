@@ -11,13 +11,14 @@ def compute_J_cutoff(y_test, y_pred):
 def compute_FPR_cutoff(y_test, y_pred):
     fpr, tpr, th = sklearn.metrics.roc_curve(y_test, y_pred)
     fpr_th = 0.05 # default fpr value
-    upper_fpr_idx = np.argmax(fpr[fpr > fpr_th])
-    upper_th = th[upper_fpr_idx]
-    upper_fpr = fpr[upper_fpr_idx]
+    #upper_fpr_idx = np.argmax(fpr[fpr > fpr_th])
+    #upper_th = th[upper_fpr_idx]
+    #upper_fpr = fpr[upper_fpr_idx]
     lower_fpr_idx = np.argmax(fpr[fpr < fpr_th])
     lower_th = th[lower_fpr_idx]
-    lower_fpr = fpr[lower_fpr_idx]
-    return lower_th + ((0.05 - lower_fpr) / (upper_fpr - lower_fpr)) * (upper_th - lower_th)
+    #lower_fpr = fpr[lower_fpr_idx]
+    #return lower_th + ((0.05 - lower_fpr) / (upper_fpr - lower_fpr)) * (upper_th - lower_th)
+    return lower_th
 
 
 def compute_cs_threshold(y_test, y_pred):

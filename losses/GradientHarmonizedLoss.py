@@ -51,22 +51,7 @@ class GradientHarmonizedLoss:
         smoothed_y = self.smooth(y_true)
         gradient = y_pred - smoothed_y
         res = gradient.reshape(y_true.shape)
-        #if self.counter % 10 == 0:
-        #    norms = np.abs(res)
-        #    plt.hist(norms, range = (0, max(norms)), bins = 100, alpha = 0.5, log = True, weights = np.ones_like(res)/float(len(res)))
-        #    plt.show()
-        #if self.counter % 10 == 0:
-        #    norms = np.abs(res)
-        #    weights = self.weights(norms)
-        #    res_aux = norms
-        #    plt.hist(weights, range = (0, max(weights)), bins = 100, alpha = 0.5,
-        #             weights = np.ones_like(res_aux)/float(len(res_aux)))
-        #    plt.yscale('log')
-        #    #plt.show(block = False)
-        #    #sys.exit()
-        #    #if self.counter == 30:
-        #    #    sys.exit()
-        #    #sys.exit()
+
         return res
 
     def hess(self, y_true, y_pred):
@@ -108,6 +93,5 @@ class GradientHarmonizedLoss:
 
     def parameter_grid(self):
         return {
-            'strategy': ("suggest_categorical", ["polynomial"]),
-            'beta': ("suggest_loguniform", 1e-5, 1000)
+            'beta': ("suggest_loguniform", 50, 500)
         }

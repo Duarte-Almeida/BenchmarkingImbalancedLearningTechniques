@@ -121,6 +121,7 @@ class RACOG(BaseOverSampler):
         self.random_state = random_state
         self.discretization = discretization
         self.categorical_features = categorical_features
+        self.sampling_ratio = sampling_strategy
         if not categorical_features:
             self.categorical_features = 'auto'
         self.i_categorical = []  # store only index of columns with categorical features
@@ -307,31 +308,37 @@ class RACOG(BaseOverSampler):
 
         return X_recon
 
+
     def _multi_run(self, X_class, vlist, depend, probs, priors, n_iter):
         """
         Run Gibbs samplers in parallel
         """
         m = X_class.shape[1]
-        n_jobs = self.n_jobs
+        n_jobs = self.n_jobs  # Assuming n_jobs is an attribute of your class
 
         params = {'vlist': vlist,
                   'depend': depend,
                   'probs': probs,
                   'priors': priors,
                   'T': n_iter}
+        
         X_new = np.zeros((0, m))
-        p = multiprocessing.Pool(n_jobs)
-        zi = X_class
-
+        
+        # Divide X_class into chunks for parallel processing
         chunk_size = len(X_class) // n_jobs
         chunks = [X_class[i:i+chunk_size] for i in range(0, len(X_class), chunk_size)]
         
+        # Create a multiprocessing Pool
         with multiprocessing.Pool(processes=n_jobs) as pool:
             results = pool.starmap(self._gibbs_sampler, [(chunk, vlist, depend, probs, priors, n_iter) for chunk in chunks])
+        
+        # Aggregate results from multiprocessing pool
         for s in results:
             X_new = np.vstack((X_new, np.array(s)))
         
         return X_new.astype(int)
+        
+        #return X_new.astype(int)
 
     def _all_keys(self, X, eps=0.00001):
         """
