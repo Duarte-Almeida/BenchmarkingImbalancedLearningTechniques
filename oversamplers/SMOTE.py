@@ -67,7 +67,7 @@ class SMOTEWrapper(SMOTE):
 
         rng = check_random_state(self.random_state)
         X_new = super()._generate_samples(X, nn_data, nn_num, rows, cols, steps)
-        print(f"Size of X: {X.shape[0]}")
+
     
         if self.categorical_features > 0:
             all_neighbors = nn_data[nn_num[rows]]
@@ -88,8 +88,7 @@ class SMOTEWrapper(SMOTE):
                 ys = start_idx + col_sels
                 X_new[:, start_idx:end_idx] = 0
                 X_new[xs, ys] = 1
-        else:
-            print(f"Not categorical features!")
+
         return X_new
 
     def get_params(self, deep=True):

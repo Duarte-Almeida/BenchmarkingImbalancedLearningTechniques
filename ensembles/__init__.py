@@ -1,13 +1,9 @@
-from .BalanceBaggingWrapper import BalanceBaggingWrapper
-from .EasyEnsembleWrapper import EasyEnsembleWrapper
 from .MesaWrapper import MesaWrapper
 from .SelfPacedEnsembleWrapper import SelfPacedEnsembleWrapper
 from .StackedEnsemble import StackedEnsemble
 
 ensemble_names = {
-    #'BalanceBagging':BalanceBaggingWrapper,
-    #'EasyEnsemble':EasyEnsembleWrapper,
-    #'MESA':MesaWrapper,
+    'MESA':MesaWrapper,
     'SelfPaced':SelfPacedEnsembleWrapper,
     'StackedEnsemble':StackedEnsemble,
 }

@@ -69,10 +69,11 @@ class CustomCV():
         clf_objective = partial(objective, X_aux = X, y_aux = y, param_grid = self.param_distributions, 
                                 cv_object = self.cv, estimator = self.estimator)
             
-        # get best classifier given previously obtained best estimator
         print(f"Finding best hyperparameter combinations...")
-
+        print(self.estimator.get_params())
         study = optuna.create_study(direction='maximize', sampler = optuna.samplers.TPESampler(seed = 42))
+        study.enqueue_trial({key: value for (key, value) in self.estimator.get_params().items() \
+                            if key in self.param_distributions.keys()})
         study.optimize(clf_objective, n_trials = self.n_iter)
 
         self.best_score_ = study.best_value
@@ -89,6 +90,5 @@ class CustomCV():
             attr_name = attr[idx + 2:]
             self.best_estimator_.named_steps[component].set_params(**{attr_name: value})
 
-         
         #self.best_estimator_.fit(X, y)
         return self.best_estimator_

@@ -73,20 +73,20 @@ def main():
     parser.add_argument('-dataset', default = None,
                          choices=['baf', 'ieee', 'mlg', 'sparkov'],
                         help="Which dataset should we choose?")
-    parser.add_argument('-data_subsampling', default = 1.00,
+    parser.add_argument('-data_subsampling', default = 0.1,
                         type = float,
                         help="By how much should the dataset be reduced?")
     parser.add_argument('-oversampling', default = None,
                         choices=['SMOTE', 'ADASYN', 'KMeansSMOTE', 'RACOG'],
                         help="Which oversampling strategy should we choose?")
     parser.add_argument('-undersampling', default = None,
-                        choices=['RUS', 'NCR', 'IHT', 'ENN', 'TomekLinks', 'IPF'],
+                        choices=['RUS', 'NCR', 'IHT'],
                         help="Which undersampling strategy should we choose?")
     parser.add_argument('-hybrid', default = None,
                         choices=["majority", "all"],
                         help="Which hybrid oversampling/undersammpling strategy should we choose?")
     parser.add_argument('-clf', default = "Base",
-                        choices = ["Base", "StackedEnsemble"],
+                        choices = ["Base"],
                         help="Which classifier should we use?")
     parser.add_argument('-loss', default = None,
                         choices = ["WeightedCrossEntropy", "LabelSmoothing", "LabelRelaxation", 
@@ -101,19 +101,13 @@ def main():
     parser.add_argument('-simplified', action='store_true',
                         help="Should we consider a simplified base model")
     parser.add_argument('-ensemble', default = None,
-                        choices=['StackedEnsemble', "EasyEnsemble", "SelfPaced", "MESA"],
+                        choices=['StackedEnsemble', "SelfPaced", "MESA"],
                         help="Which ensembling strategy should we apply?")
     parser.add_argument('-n_iter', default = 50, type = int)
     parser.add_argument('-self_supervised', default = False,
                         action="store_true",
                         help="Should we use the self supervised representation?")
 
-
-    #with open("res_train.npy", "rb") as fp:
-    #    X_train = np.load(fp)
-    #with open("res_test.npy", "rb") as fp:
-    #    X_test = np.load(fp)
-    #cat_feats = []
     opt = parser.parse_args()
 
     name = "Base"
@@ -123,32 +117,6 @@ def main():
     X_test, y_test = data["test"]
 
     cat_feats = data["cat_feats"]
-
-    #tb = TabNetSelfSupervised()
-    #tb.fit(X_train, [i for i in range(X_train.shape[1] - len(cat_feats), X_train.shape[1])])
-    #res_train = tb.transform(X_train)
-    #res_test = tb.transform(X_test)
-    #print(res_train.shape)
-    #print(res_test.shape)
-    #with open("res_train.npy", "wb") as fp:
-    #    np.save(fp, res_train)
-    #with open("res_test.npy", "wb") as fp:
-    #    np.save(fp, res_test)
-    #sys.exit()
-    #with open("res_train.npy", "rb") as fp:
-    #    X_train = np.load(fp)
-    #with open("res_test.npy", "rb") as fp:
-    #    X_test = np.load(fp)
-    #cat_feats = []
-
-    print(f"Size: {X_train.shape}")
-    print(f"Size: {y_train.shape}")
-
-    print(f"Size: {X_test.shape}")
-    print(f"Size: {y_test.shape}")
-
-    X_train_old = X_train
-    y_train_old = y_train
 
     np.random.seed(42)
     if opt.data_subsampling < 1.00:
@@ -245,6 +213,8 @@ def main():
         steps = steps + [("clf", clf)]
         for (parameter, values) in clf.parameter_grid().items():
             param_grid["clf__" + str(parameter)] = values
+    
+    clf.untoggle_param_grid("clf")
     
     pipeline = Pipeline(steps=steps)
 
