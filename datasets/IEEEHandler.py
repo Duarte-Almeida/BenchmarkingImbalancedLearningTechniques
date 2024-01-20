@@ -29,25 +29,24 @@ class IEEEHandler():
         ]
 
     def fetch_data(self):
-
-        if not os.path.exists('datasets/'):
-            os.makedirs('datasets/')
-        if not os.path.exists(f"datasets/{self.dir_name}"):
-            os.makedirs(f"datasets/{self.dir_name}")
-        for file in self.dataset_files:
-            if os.path.exists(f"datasets/{self.dir_name}/{file}"):
-                continue
-            print(f"Dataset {self.dir_name} does not exist. Fetching dataset {self.dir_name}...")
-            api = KaggleApi()
-            print(f"Fetching {file}")
-            api.authenticate()
-            api.competition_download_file(self.link, file, f"datasets/{self.dir_name}")
-            zf = ZipFile(f"datasets/{self.dir_name}/{file}.zip")
-            zf.extractall(f"datasets/{self.dir_name}")
-            zf.close()
-            os.remove(f"datasets/{self.dir_name}/{file}.zip")
-
-        if not os.path.exists(f"datasets/{self.dir_name}/features.npy"):
+        
+        if not os.path.exists(f"datasets/{self.dir_name}/features_train.npy"):
+            if not os.path.exists('datasets/'):
+                os.makedirs('datasets/')
+            if not os.path.exists(f"datasets/{self.dir_name}"):
+                os.makedirs(f"datasets/{self.dir_name}")
+            for file in self.dataset_files:
+                if os.path.exists(f"datasets/{self.dir_name}/{file}"):
+                    continue
+                print(f"Dataset {self.dir_name} does not exist. Fetching dataset {self.dir_name}...")
+                api = KaggleApi()
+                print(f"Fetching {file}")
+                api.authenticate()
+                api.competition_download_file(self.link, file, f"datasets/{self.dir_name}")
+                zf = ZipFile(f"datasets/{self.dir_name}/{file}.zip")
+                zf.extractall(f"datasets/{self.dir_name}")
+                zf.close()
+                os.remove(f"datasets/{self.dir_name}/{file}.zip")
 
             print(f"Data not processed... Processing data")
 
@@ -65,11 +64,12 @@ class IEEEHandler():
             identity_cat_feats = ["DeviceType", "DeviceInfo"] + [f"id_{i}" for i in range(12, 39)]
             identity_train_df = pd.read_csv(f"datasets/{self.dir_name}/{self.identities_train}")
 
-            print(f"Number of infos: {identity_train_df.shape[0]}")
+            #print(f"Number of infos: {identity_train_df.shape[0]}")
 
-            merged_df = pd.merge(transaction_train_df, identity_train_df, on='TransactionID', how='inner')
+            #merged_df = pd.merge(transaction_train_df, identity_train_df, on='TransactionID', how='inner')
+            merged_df = transaction_train_df
 
-            cat_feats = transaction_cat_feats + identity_cat_feats
+            cat_feats = transaction_cat_feats #+ identity_cat_feats
             non_cat_feats = [col for col in merged_df.columns if col not in cat_feats]
 
             columns_with_nan = merged_df.columns[merged_df.isna().any()].tolist()
@@ -99,9 +99,11 @@ class IEEEHandler():
             print(f"Performing variable selection based on Extra Trees Classifier")
 
             # Splitting the data into training and validation sets
-            X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.2, random_state=42, shuffle = True)
+            X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.10, random_state=42, shuffle = True)
             extra_trees = ExtraTreesClassifier(n_estimators=100, random_state=42)
             extra_trees.fit(X_train, y_train)
+
+            '''
             y_valid_probabilities = extra_trees.predict_proba(X_valid)[:, 1]  # Probabilities of the positive class
 
             # Compute the AUC-ROC score
@@ -123,106 +125,45 @@ class IEEEHandler():
 
             print(f"AUC: {auc_roc_score}")
             print(f"FPR:{FPR}  \n TPR: {TPR}")
+            '''
+            # Select the top 60 features
+            sfm = SelectFromModel(extra_trees, prefit=True, max_features=30)
 
-            # Extract feature importances
-            importances = extra_trees.feature_importances_
+            # Get the indices of the selected features
+            print(np.where(sfm.get_support()))
+            selected_feature_indices = np.where(sfm.get_support())[0]
 
-            # Sort feature importances in descending order
-            indices = np.argsort(importances)[::-1]
+            # Retain the order of the features in the original data
+            X_selected_train = X_train.values[:, selected_feature_indices]
+            X_selected_test = X_valid.values[:, selected_feature_indices]
 
-            #print("Feature ranking:")
-            #for f in range(X_train.shape[1]):
-            #    print(f"{f + 1}. feature {indices[f]} ({importances[indices[f]]})")
-
-            # Select features based on importance
-            sfm = SelectFromModel(extra_trees, threshold='median', prefit = True)  # You can adjust the threshold if needed
-
-            # Transform the dataset to only include important features
-            X_selected = sfm.transform(X)
-
-            # Get a mask of features selected
             selected_features = sfm.get_support()
-
-            #print(f"Selected features: {selected_features}")
+            print(f"Here are my selected features: {selected_features}")
+            print(f"Here are my selected cat features: {selected_features[-len(cat_feats):]}")
             cat_feats = np.array(cat_feats)
             cat_feats = cat_feats[selected_features[-len(cat_feats):]]
 
-            #cat_feats = [c in cat_feats in c in selected_features]
+            X_train = X_selected_train
+            X_test = X_selected_test
+            y_test = y_valid
 
-            print(f"Size after reduction: {X_selected.shape[1]}")
-
-            np.save(f"datasets/{self.dir_name}/features.npy", X_selected)
-            np.save(f"datasets/{self.dir_name}/targets.npy", y.values)
+            np.save(f"datasets/{self.dir_name}/features_train.npy", X_train)
+            np.save(f"datasets/{self.dir_name}/targets_train.npy", y_train.values)
+            np.save(f"datasets/{self.dir_name}/features_test.npy", X_test)
+            np.save(f"datasets/{self.dir_name}/targets_test.npy", y_test.values)
             with open(f'datasets/{self.dir_name}/info.pkl', 'wb') as fp:
                 pkl.dump({"cat_feats": cat_feats}, fp)
-
-            # Plot feature importances in a bar chart
-            plt.figure(figsize=(10, 8))
-            plt.title("Feature Importances")
-            plt.bar(range(X_train.shape[1]), importances[indices], align="center")
-            plt.xticks(range(X_train.shape[1]), indices)
-            plt.xlim([-1, X_train.shape[1]])
-            plt.show()
-            plt.clf()
-            X = X_selected
-            y = y.values
-            '''
-
-            # Plot ROC curve
-            plt.figure(figsize=(8, 6))
-            plt.plot(fpr, tpr, color='blue', lw=2, label=f'ROC Curve (AUC = {auc_roc_score:.2f})')
-            plt.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--', label='Random Guessing')
-            plt.xlabel('False Positive Rate')
-            plt.ylabel('True Positive Rate')
-            plt.title('Receiver Operating Characteristic (ROC) Curve')
-            plt.legend(loc='lower right')
-            plt.grid(True)
-            plt.show()
-
-            sys.exit()
-            '''
+            X_train = X_train
+            y_train = y_train.values
+            X_test = X_test
+            y_test = y_test.values
+        
         else:
-            X = np.load(f"datasets/{self.dir_name}/features.npy")
-            y = np.load(f"datasets/{self.dir_name}/targets.npy")
+            X_train = np.load(f"datasets/{self.dir_name}/features_train.npy")
+            y_train = np.load(f"datasets/{self.dir_name}/targets_train.npy")
+            X_test = np.load(f"datasets/{self.dir_name}/features_test.npy")
+            y_test = np.load(f"datasets/{self.dir_name}/targets_test.npy")
             with open(f"datasets/{self.dir_name}/info.pkl", "rb") as fp:
                 cat_feats = pkl.load(fp)["cat_feats"]
 
-            '''
-            sample_size = int(0.05 * X.shape[0])
-            random_indices = np.random.choice(X.shape[0], sample_size, replace=False)
-            X_sampled = X[random_indices]
-            y_sampled = y[random_indices]
-
-
-            # Assuming the last M columns are categorical variables
-            M = len(cat_feats)  # Number of categorical columns (adjust based on your dataset)
-
-            # Step 1: Separate the last M columns and the remaining columns
-            continuous_features = X_sampled[:, :-M]
-            categorical_features = X_sampled[:, -M:]
-
-            # Step 2: Perform one-hot encoding on the categorical features
-            encoder = OneHotEncoder(sparse=False, drop='first')  # Drop the first dummy variable to avoid multicollinearity
-            categorical_encoded = encoder.fit_transform(categorical_features)
-
-            # Step 3: Concatenate the one-hot encoded features with the continuous features
-            X_processed = np.hstack((continuous_features, categorical_encoded))
-
-            # Step 4: Compute t-SNE representation of X_processed
-            tsne = TSNE(n_components=2, random_state=42)
-            X_tsne = tsne.fit_transform(X_processed)
-
-            # Step 5: Scatter plot of t-SNE transformed data points colored by target values
-            plt.figure(figsize=(10, 8))
-            plt.scatter(X_tsne[y_sampled == 0][:, 0], X_tsne[y_sampled == 0][:, 1], color='red', label='Negatives')
-            plt.scatter(X_tsne[y_sampled == 1][:, 0], X_tsne[y_sampled == 1][:, 1], color='blue', label='Positives')
-
-            plt.xlabel('t-SNE Feature 1')
-            plt.ylabel('t-SNE Feature 2')
-            plt.title('t-SNE Visualization with One-Hot Encoded Categorical Features')
-            plt.legend()
-            plt.grid(True)
-            plt.show()
-        '''
-        
-        return X, y, cat_feats
+        return X_train, y_train, X_test, y_test, cat_feats

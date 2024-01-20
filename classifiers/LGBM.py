@@ -49,7 +49,7 @@ class LGBM(BaseEstimator, ClassifierMixin):
             'model__min_child_samples': ("suggest_int", 20, 101),  # Minimum number of data needed in a child
             'model__subsample': ("suggest_uniform", 0.5, 1),  # Subsample ratio of the training instance
             'model__colsample_bytree': ("suggest_uniform", 0.5, 1),  # Subsample ratio of columns when constructing each tree
-            'model__n_estimators': ("suggest_int", 50, 500),  # Number of boosting rounds
+            'model__n_estimators': ("suggest_int", 50, 1000),  # Number of boosting rounds
             'model__reg_lambda': ("suggest_loguniform", 10.0, 10000.0)  # Regularization lambda
         }
 
@@ -78,8 +78,6 @@ class LGBM(BaseEstimator, ClassifierMixin):
         X, y = check_X_y(X, y)
         if categorical_features is None:
             categorical_features = 0
-
-        #print(f"Using the following parameters: \n {self.model.get_params()}")
             
         self.model.set_params(objective = self.loss_fn.obj)
         self.classes_, y = np.unique(y, return_inverse=True)

@@ -64,7 +64,7 @@ class RUSWrapper(RandomUnderSampler):
 
     def parameter_grid(self):
         return {
-            'sampling_ratio': ("suggest_uniform", 0.5, 1.0)
+            'sampling_ratio': ("suggest_uniform", 0.0, 0.1)
         }
     def adapt_hyperparameters(self, X, y):
         pass

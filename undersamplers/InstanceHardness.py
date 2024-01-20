@@ -21,7 +21,7 @@ class IHTWrapper(InstanceHardnessThreshold):
         self.random_state = random_state
         self.kwargs = {}
         self.estimator = estimator
-        self.cv = 3
+        self.cv = 5
         self.cls = cls
         self.sampling_ratio = 1.0
 
@@ -34,11 +34,14 @@ class IHTWrapper(InstanceHardnessThreshold):
 
         skf = StratifiedKFold(n_splits=self.cv)
         probs = np.zeros_like(y, dtype = float)
+        done = np.zeros_like(y, dtype = int)
 
         for i, (train_index, test_index) in enumerate(skf.split(X, y)):
             self.estimator.fit(X[train_index], y[train_index])
-            probs += self.estimator.predict_proba(X)[:, 1]
-        probs /= self.cv
+            probs[test_index] = self.estimator.predict_proba(X[test_index])[:, 1]
+            done[test_index] += 1
+        
+        print(f"Are they all one? {np.all(done == 1)}")
 
         neg = y[y == 0].shape[0]
         pos = y[y == 1].shape[0]
@@ -49,7 +52,7 @@ class IHTWrapper(InstanceHardnessThreshold):
 
         if self.cls == "majority":
             self.sampling_strategy = min(1, IR + self.sampling_ratio * (1 - IR) + eps)
-            num_samples = int(pos / self.sampling_ratio)
+            num_samples = int(pos / self.sampling_strategy)
             prob = num_samples / neg
             quantile = np.quantile(probs[y == 0], prob)
             pos_idx = np.where(y == 1)[0]

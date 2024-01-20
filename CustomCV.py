@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import ParameterGrid, PredefinedSplit, RandomizedSearchCV
 from itertools import product
-from sklearn.metrics import make_scorer, roc_auc_score
+from sklearn.metrics import make_scorer, roc_auc_score, roc_curve
 from sklearn.model_selection import StratifiedKFold
 from imblearn.pipeline import Pipeline
 from skopt import BayesSearchCV
@@ -10,6 +10,7 @@ import optuna
 import matplotlib.pyplot as plt
 from functools import partial
 import thresholds
+import pickle as pkl
 
 import sys
 
@@ -44,10 +45,10 @@ class CustomCV():
                 X_test, y_test = X_aux[test_index], y_aux[test_index]
                
                 estimator.set_params(**params)
-                #try:
-                estimator.fit(X_train, y_train, *args, **kwargs)
-                #except Exception:   # assign score of 0 in case of crash (but not error)
-                #    return 0
+                try:
+                    estimator.fit(X_train, y_train, *args, **kwargs)
+                except Exception:   # assign score of 0 in case of crash (but not error)
+                    return 0
 
                 probs = estimator.predict_proba(X_test)[:, 1]
                 scores.append(roc_auc_score(y_test, probs))
@@ -87,6 +88,7 @@ class CustomCV():
             component = attr[:idx]
             attr_name = attr[idx + 2:]
             self.best_estimator_.named_steps[component].set_params(**{attr_name: value})
-           
-        self.best_estimator_.fit(X, y)
+
+         
+        #self.best_estimator_.fit(X, y)
         return self.best_estimator_

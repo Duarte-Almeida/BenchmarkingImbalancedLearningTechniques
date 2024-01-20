@@ -12,7 +12,6 @@ import thresholds
 import losses
 import classifiers
 import ensembles
-#from classifiers import LGBM, StackedEnsemble
 from CustomCV import CustomCV
 
 import lightgbm as lgb
@@ -22,25 +21,57 @@ import scipy
 from sklearn.base import clone
 from sklearn.utils import _print_elapsed_time
 from sklearn.utils.validation import check_memory
-from sklearn.metrics import make_scorer
+import sklearn.metrics
 from imblearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
 import sklearn.model_selection
 from sklearn import metrics
-from TabNetSelfSupervised import TabNetSelfSupervised
+import sklearn.utils
 
 import matplotlib.pyplot as plt
-import torch
 
 
 def auc(y_test, y_pred):    
     return sklearn.metrics.roc_auc_score(y_test, y_pred)
 
+def compute_metrics(estimator, X_train, y_train, X_test, y_test):
+    aucs = []
+    tprs = []
+    start = time.time()
+    estimator.fit(X_train, y_train)
+    end = time.time()
+    probs = estimator.predict_proba(X_test)[:, 1]
+    n_iterations = 100
+
+   
+    for _ in range(n_iterations):
+        # Create a bootstrap sample
+        y_test_bootstrap, y_prob_bootstrap = sklearn.utils.resample(y_test, probs)
+        
+        fpr, tpr, th = sklearn.metrics.roc_curve( y_test_bootstrap, y_prob_bootstrap)
+        lower_fpr_idx = np.argmax(fpr[fpr < 0.05])
+        tpr_score = tpr[lower_fpr_idx]
+        auc = sklearn.metrics.roc_auc_score( y_test_bootstrap, y_prob_bootstrap)
+
+        aucs.append(auc)
+        tprs.append(tpr_score)
+        #print(f"\n")
+        #print(f"AUC: {auc}")
+        #print(f"TPR: {tpr_score}")
+        
+    return {
+        "AUC": np.mean(aucs),
+        "AUC_std": np.std(aucs),
+        "TPR": np.mean(tprs),
+        "TPR_std": np.std(tprs),
+        "Time": start - end,
+    }
+
+
 def main():
-    device = torch.device('cpu')
     parser = argparse.ArgumentParser()
-    parser.add_argument('-dataset',
-                        choices=['baf', 'ieee', 'mlg', 'sparkov'],
+    parser.add_argument('-dataset', default = None,
+                         choices=['baf', 'ieee', 'mlg', 'sparkov'],
                         help="Which dataset should we choose?")
     parser.add_argument('-data_subsampling', default = 1.00,
                         type = float,
@@ -77,17 +108,6 @@ def main():
                         action="store_true",
                         help="Should we use the self supervised representation?")
 
-    #tb = TabNetSelfSupervised()
-    #tb.fit(X_train, [i for i in range(X_train.shape[1] - len(cat_feats), X_train.shape[1])])
-    #res_train = tb.transform(X_train)
-    #res_test = tb.transform(X_test)
-    #print(res_train.shape)
-    #print(res_test.shape)
-    #with open("res_train.npy", "wb") as fp:
-    #    np.save(fp, res_train)
-    #with open("res_test.npy", "wb") as fp:
-    #    np.save(fp, res_test)
-    #sys.exit()
 
     #with open("res_train.npy", "rb") as fp:
     #    X_train = np.load(fp)
@@ -103,6 +123,32 @@ def main():
     X_test, y_test = data["test"]
 
     cat_feats = data["cat_feats"]
+
+    #tb = TabNetSelfSupervised()
+    #tb.fit(X_train, [i for i in range(X_train.shape[1] - len(cat_feats), X_train.shape[1])])
+    #res_train = tb.transform(X_train)
+    #res_test = tb.transform(X_test)
+    #print(res_train.shape)
+    #print(res_test.shape)
+    #with open("res_train.npy", "wb") as fp:
+    #    np.save(fp, res_train)
+    #with open("res_test.npy", "wb") as fp:
+    #    np.save(fp, res_test)
+    #sys.exit()
+    #with open("res_train.npy", "rb") as fp:
+    #    X_train = np.load(fp)
+    #with open("res_test.npy", "rb") as fp:
+    #    X_test = np.load(fp)
+    #cat_feats = []
+
+    print(f"Size: {X_train.shape}")
+    print(f"Size: {y_train.shape}")
+
+    print(f"Size: {X_test.shape}")
+    print(f"Size: {y_test.shape}")
+
+    X_train_old = X_train
+    y_train_old = y_train
 
     np.random.seed(42)
     if opt.data_subsampling < 1.00:
@@ -182,6 +228,7 @@ def main():
             name = name[5:]
         clf.set_params(**{"loss_fn": loss})
         clf.untoggle_param_grid("loss")
+        clf.untoggle_param_grid("clf")
 
     if opt.ensemble is not None:
         ens = ensembles.fetch_ensemble(opt.ensemble)
@@ -235,18 +282,20 @@ def main():
     est = search.fit(X_train, y_train)
     end_time = time.time()
 
-    test_start = time.time()
-    probs = est.predict_proba(X_test)[:, 1]
+    #test_start = time.time()
+    #probs = est.predict_proba(X_test)[:, 1]
     #train_probs = est.predict_proba(X_train)[:, 1]
 
     #th = search.th#thresholds.fetch_threshold(opt.threshold, y_train, train_probs)
-    th = thresholds.compute_FPR_cutoff(y_test, probs)
-    y_pred = est.predict(X_test, **{"th":th})
-    test_end = time.time()
-    test_time = test_end - test_start
+    #th = thresholds.compute_FPR_cutoff(y_test, probs)
+    #y_pred = est.predict(X_test, **{"th":th})
+    #test_end = time.time()
+    #test_time = test_end - test_start
+
+    metrics = compute_metrics(est, X_train, y_train, X_test, y_test)
 
     total_time = end_time - start_time
-    print(f'Ended training and classification in {round(total_time + test_time, 2)} seconds.\n')
+    #print(f'Ended training in {round(total_time, 2)} seconds.\n')
     
     # TODO: add more conditions in the future
     if opt.loss is None and opt.ensemble is None:
@@ -271,18 +320,22 @@ def main():
         if opt.ensemble is not None:
             subtype = "Ensembles"
 
-    utils.dump_metrics(y_test, y_pred, probs, name, total_time, test_time, metric_file, subtype, search.best_params_, opt.dataset)
+    utils.dump_metrics(metrics, name, metric_file, subtype, search.best_params_, opt.dataset)
 
-    if opt.plot_scores:
-        positives = probs[y_test == 1]
-        negatives = probs[y_test == 0]
-        plt.hist(probs[y_test == 1], bins = 100, range = (0, 1), label = "Positive", alpha = 0.5, weights = np.ones_like(positives)/float(len(positives)))
-        plt.hist(probs[y_test == 0], bins = 100, range = (0, 1), label = "Negative", alpha = 0.5, weights = np.ones_like(negatives)/float(len(negatives)))
-        plt.axvline(x = th, alpha = 0.5, color = "red", linestyle = "--", linewidth = 1)
-        plt.legend(loc='upper right')
-        results_dir = f'results/{opt.dataset}/{metric_file}/{name}/'
-        os.makedirs(results_dir, exist_ok=True)
-        plt.savefig(os.path.join(results_dir, f'{name}_probs.pdf'))
+    probs = est.predict_proba(X_test)[:, 1]
+    fpr, tpr, ths = sklearn.metrics.roc_curve(y_test, probs)
+    lower_fpr_idx = np.argmax(fpr[fpr < 0.05])
+    th = ths[lower_fpr_idx]
+
+    positives = probs[y_test == 1]
+    negatives = probs[y_test == 0]
+    plt.hist(probs[y_test == 1], bins = 100, range = (0, 1), label = "Positive", alpha = 0.5, weights = np.ones_like(positives)/float(len(positives)))
+    plt.hist(probs[y_test == 0], bins = 100, range = (0, 1), label = "Negative", alpha = 0.5, weights = np.ones_like(negatives)/float(len(negatives)))
+    plt.axvline(x = th, alpha = 0.5, color = "red", linestyle = "--", linewidth = 1)
+    plt.legend(loc='upper right')
+    results_dir = f'results/{opt.dataset}/{metric_file}/{name}/'
+    os.makedirs(results_dir, exist_ok=True)
+    plt.savefig(os.path.join(results_dir, f'{name}_probs.pdf'))
 
 if __name__ == '__main__':
     main()

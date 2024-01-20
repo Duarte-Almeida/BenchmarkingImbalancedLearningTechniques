@@ -14,9 +14,9 @@ class CrossEntropyLoss:
         self.lr_alpha = 0
         self.weight = 1
         self.grid = {}
-        self.grid["ls"] = {"ls_alpha": ("suggest_uniform", 0.0, 0.05)}
-        self.grid["weighted"] = {"weight":  ("suggest_uniform", 1.0, 1000.0 - 1.0)}
-        self.grid["lr"] = {"lr_alpha": ("suggest_uniform", 0.0, 0.5)}
+        self.grid["ls"] = {"ls_alpha": ("suggest_loguniform", 0.00001, 0.1)}
+        self.grid["weighted"] = {"weight":  ("suggest_uniform", 1.0, 1000)}
+        self.grid["lr"] = {"lr_alpha": ("suggest_uniform", 0.0, 0.8)}
         self.freeze = [key for key in self.grid.keys()]
         self.kwargs = {}
 
@@ -40,15 +40,17 @@ class CrossEntropyLoss:
         smoothed_y = self.smooth_targets(y_true)
         gradient = y_pred - smoothed_y
         gradient[y_true == 1] *= self.weight
+        p_wrong = np.where(y_true, 1 - y_pred, y_pred)
+        mask = p_wrong <= self.lr_alpha
         res = gradient.reshape(y_true.shape)
-
+        res[mask] = 0
         return res
 
     def hess(self, y_true, y_pred):
         #y_pred = np.clip(y_pred, 1e-15,  1 - 1e-15)
         #hessian = y_pred * (1 - y_pred)
         hessian = 1e-10 * np.ones_like(y_true)
-        hessian[y_true == 1] *= self.weight
+        #hessian[y_true == 1] =
         return hessian.reshape(y_true.shape)
 
     def init_score(self, y_true):

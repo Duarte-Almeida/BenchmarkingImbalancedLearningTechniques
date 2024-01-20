@@ -22,8 +22,15 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
         self.random_state = random_state
         self.kwargs = {}
         self.sampling_ratio = 1
+        self.grid = {
+            'sampling_ratio': ("suggest_uniform", 0.0, 0.1),
+            'cluster_balance_threshold': ("suggest_loguniform", 0.001, 0.2),
+            'kmeans_estimator': ("suggest_categorical", [i for i in range(5, 500)])
+        }
 
     def fit_resample(self, X, y):
+
+        #print(f"Here is my threshold: {self.cluster_balance_threshold}")
 
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
@@ -52,12 +59,8 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
         else:
             X_transformed = X
 
-        try:
-            X_resampled, y_resampled = super().fit_resample(X_transformed, y)
-        except RuntimeError:
-            X_resampled, y_resampled = X_transformed, y
-            #print(f"The cluster threshold is {self.cluster_balance_threshold}")
-            #raise RuntimeError
+        X_resampled, y_resampled = super().fit_resample(X_transformed, y)
+
 
         if self.categorical_features > 0:
             X_cat_resampled = X_resampled[:, -X_cat.shape[1]:]
@@ -120,7 +123,7 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
                 #print(f"Setting parameter")
                 setattr(self, key, value)
             else:
-                #rint(f"Do not have parameter!")
+                #print(f"Do not have parameter!")
                 self.kwargs[key] = value
 
         for attr, attr_dict in attr_params.items():
@@ -130,16 +133,14 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
 
     def parameter_grid(self):
 
-        grid = {
-            'sampling_ratio': ("suggest_uniform", 0.0, 0.1),
-            'cluster_balance_threshold': ("suggest_loguniform", 0.001, 0.2),
-            'kmeans_estimator': ("suggest_categorical", [i for i in range(5, 500)])
-        }
         if self.k_neighbors.parameter_grid() is not None:
             for key, value in self.k_neighbors.parameter_grid().items():
-                grid['k_neighbors__' + key] = value
+                self.grid['k_neighbors__' + key] = value
 
-        return grid
+        return self.grid
     def adapt_hyperparameters(self, X, y):
-        pass
+        pos = np.sum(y[y == 1])
+        prop_positives = pos / X.shape[0]
+        self.grid['cluster_balance_threshold'] = ("suggest_loguniform", min(0.001, prop_positives), prop_positives)
+        return self
 

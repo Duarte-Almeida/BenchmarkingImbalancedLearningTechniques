@@ -16,6 +16,9 @@ from functools import partial
 import multiprocessing
 
 import sys, os
+from sklearn.preprocessing import KBinsDiscretizer
+
+import matplotlib.pyplot as plt
 
 
 MAX_DATASET_SIZE = 10000
@@ -163,16 +166,21 @@ class RACOG(BaseOverSampler):
                 self.i_categorical = np.arange(X.shape[1] - self.categorical_features, X.shape[1])
         else:
             self.i_categorical = np.arange(X.shape[1]).tolist()
+        
+        self.i_continuous = np.array([i for i in range(X.shape[1]) if i not in self.i_categorical])
+
+        #print(f"These are my categorical features: {self.i_categorical}")
 
         # perform discretization
-        continuous = self.i_categorical
+        continuous = self.i_continuous
         if continuous.size != 0:
+            
             if self.discretization == 'mdlp':
                 self.disc = MDLP(categorical_features=self.i_categorical, random_state = self.random_state)
 
             # consider subsampled dataset in discretization process to speedup
             if (X.shape[0] > MAX_DATASET_SIZE):
-                np.random.seed(self.random_state)
+                #np.random.seed(self.random_state)
                 idx = np.random.choice(X.shape[0], size = MAX_DATASET_SIZE, replace = False)
                 X_sub = X_di[idx]
                 y_sub = y[idx]
@@ -181,6 +189,27 @@ class RACOG(BaseOverSampler):
             sys.stdout = sys.__stdout__
             X_di = self.disc.transform(X_di, y)
             X_di = X_di.astype(int)
+            #for i in range(X_di.shape[1]):
+            #    if i in self.i_categorical:
+            #        continue
+            #    print(np.unique(X_di[:, [i]]))
+
+            '''
+            self.disc = KBinsDiscretizer(encode = "ordinal", strategy = "uniform")
+
+            sys.stdout = open(os.devnull, 'w')
+            self.i_continuous = np.array([i for i in range(X_di.shape[1]) if i not in self.i_categorical])
+            self.disc.fit(X_di[:, self.i_continuous], y[self.i_continuous])
+            sys.stdout = sys.__stdout__
+            #X_di = X_sub.copy()
+            X_di[:, self.i_continuous] = self.disc.transform(X_di[:, self.i_continuous])
+            X_di = X_di.astype(int)
+            for i in range(X_di.shape[1]):
+                if i in self.i_categorical:
+                    continue
+                print(np.unique(X_di[:, [i]]))
+            '''
+            
 
         # initialize tree structure, prior and conditional probability tables
         self.probs = {}
@@ -217,9 +246,10 @@ class RACOG(BaseOverSampler):
 
         X_di = X
 
-        continuous = self.i_categorical
+        continuous = self.i_continuous
         if continuous.size != 0:
             X_di = self.disc.transform(X)
+            #X_di[:, self.i_continuous] = self.disc.transform(X[:, self.i_continuous])
 
         for class_sample, n_samples in self.sampling_strategy_.items():
             if n_samples < self.threshold:
@@ -237,7 +267,7 @@ class RACOG(BaseOverSampler):
                                     depend=depend, probs=probs,
                                     priors=priors, n_iter=n_iter)
 
-            continuous = self.i_categorical
+            continuous = self.i_continuous
             if continuous.size != 0:
                 X_new = self._recon_continuous(X, y, X_di, X_new, class_sample, self.i_categorical)
             y_new = np.ones(X_new.shape[0]) * class_sample
@@ -303,11 +333,10 @@ class RACOG(BaseOverSampler):
             lower[edge_indices] = min_j
             lower[non_edge_indices] = cut_points[j][X_sampled_j[non_edge_indices] - 1]
 
-            np.random.seed(self.random_state)
+            #np.random.seed(self.random_state)
             X_recon[:, j] = lower + np.random.uniform() * (upper - lower)
 
         return X_recon
-
 
     def _multi_run(self, X_class, vlist, depend, probs, priors, n_iter):
         """
@@ -462,7 +491,6 @@ class RACOG(BaseOverSampler):
 
         def vectorized_random_choice(prob_matrix):
             s = prob_matrix.cumsum(axis=0)
-            np.random.seed(self.random_state)
             r = np.random.rand(prob_matrix.shape[1])
             k = (s < r).sum(axis=0)
             return k - 1
@@ -560,15 +588,15 @@ class RACOG(BaseOverSampler):
         if isinstance(X, pd.DataFrame):
             new_index = X.index.values
             for i in range(num):
-                if random_state is not None:
-                    np.random.seed(random_state + i)
+                #if random_state is not None:
+                    #np.random.seed(random_state + i)
                 new_index = np.random.permutation(new_index)
             X.reindex(new_index)
             y.reindex(new_index)
         else:
             for i in range(num):
-                if random_state is not None:
-                    np.random.seed(random_state + i)
+                #if random_state is not None:
+                    #np.random.seed(random_state + i)
                 new_index = np.random.permutation(new_index)
                 X = X[new_index]
                 y = y[new_index]

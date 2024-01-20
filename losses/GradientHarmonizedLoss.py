@@ -33,7 +33,7 @@ class GradientHarmonizedLoss:
         return (1 - self.alpha) * y + self.alpha * mean
     
     def weights(self, grad_norms):
-        histogram = np.zeros(self.M)
+        histogram = np.zeros(int(self.M))
         indices = np.floor(grad_norms/self.eps).astype(int)
         histogram = np.bincount(indices)
         indices = np.floor(grad_norms / self.eps).astype(int)
@@ -87,11 +87,14 @@ class GradientHarmonizedLoss:
         for key, value in params.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+                if key == "M":
+                    self.eps = 1 / self.M
             else:
                 self.kwargs[key] = value
         return self
 
     def parameter_grid(self):
         return {
-            'beta': ("suggest_loguniform", 50, 500)
+            'beta': ("suggest_loguniform", 50, 500),
+            'M': ("suggest_loguniform", 10, 10000)
         }

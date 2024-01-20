@@ -22,23 +22,22 @@ class MLGHandler():
         self.dataset_file = "creditcard.csv"
 
     def fetch_data(self):
-
-        if not os.path.exists('datasets/'):
-            os.makedirs('datasets/')
-        if not os.path.exists(f"datasets/{self.dir_name}"):
-            os.makedirs(f"datasets/{self.dir_name}")
-        if not os.path.exists(f"datasets/{self.dir_name}/{self.dataset_file}"):
-            print(f"Dataset {self.dir_name} does not exist. Fetching dataset {self.dir_name}...")
-            api = KaggleApi()
-            print(f"Fetching {self.dataset_file}")
-            api.authenticate()
-            api.dataset_download_file(self.link, self.dataset_file, f"datasets/{self.dir_name}")
-            zf = ZipFile(f"datasets/{self.dir_name}/{self.dataset_file}.zip")
-            zf.extractall(f"datasets/{self.dir_name}")
-            zf.close()
-            os.remove(f"datasets/{self.dir_name}/{self.dataset_file}.zip")
-
-        if not os.path.exists(f"datasets/{self.dir_name}/features.npy"):
+        
+        if not os.path.exists(f"datasets/{self.dir_name}/features_train.npy"):
+            if not os.path.exists('datasets/'):
+                os.makedirs('datasets/')
+            if not os.path.exists(f"datasets/{self.dir_name}"):
+                os.makedirs(f"datasets/{self.dir_name}")
+            if not os.path.exists(f"datasets/{self.dir_name}/{self.dataset_file}"):
+                print(f"Dataset {self.dir_name} does not exist. Fetching dataset {self.dir_name}...")
+                api = KaggleApi()
+                print(f"Fetching {self.dataset_file}")
+                api.authenticate()
+                api.dataset_download_file(self.link, self.dataset_file, f"datasets/{self.dir_name}")
+                zf = ZipFile(f"datasets/{self.dir_name}/{self.dataset_file}.zip")
+                zf.extractall(f"datasets/{self.dir_name}")
+                zf.close()
+                os.remove(f"datasets/{self.dir_name}/{self.dataset_file}.zip")
 
             print(f"Data not processed... Processing data")
 
@@ -107,35 +106,35 @@ class MLGHandler():
                 sfm = SelectFromModel(extra_trees, threshold='median', prefit = True)  # You can adjust the threshold if needed
 
                 # Transform the dataset to only include important features
-                X_selected = sfm.transform(X)
+                X_selected_train = sfm.transform(X_train)
+                X_selected_test = sfm.transform(X_test)
                 selected_features = sfm.get_support()
                 cat_feats = np.array(cat_feats)
                 cat_feats = cat_feats[selected_features[-len(cat_feats):]]
 
-                print(f"Size after reduction: {X_selected.shape[1]}")
+                X_train = X_selected_train
+                X_test = X_selected_test
+            else:
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle = True)
 
-                # Plot feature importances in a bar chart
-                plt.figure(figsize=(10, 8))
-                plt.title("Feature Importances")
-                plt.bar(range(X_train.shape[1]), importances[indices], align="center")
-                plt.xticks(range(X_train.shape[1]), indices)
-                plt.xlim([-1, X_train.shape[1]])
-                plt.show()
-                plt.clf()
 
-                X = X_selected
-
-            np.save(f"datasets/{self.dir_name}/features.npy", X.values)
-            np.save(f"datasets/{self.dir_name}/targets.npy", y.values)
+            np.save(f"datasets/{self.dir_name}/features_train.npy", X_train.values)
+            np.save(f"datasets/{self.dir_name}/targets_train.npy", y_train.values)
+            np.save(f"datasets/{self.dir_name}/features_test.npy", X_test.values)
+            np.save(f"datasets/{self.dir_name}/targets_test.npy", y_test.values)
             with open(f'datasets/{self.dir_name}/info.pkl', 'wb') as fp:
                 pkl.dump({"cat_feats": cat_feats}, fp)
-            X = X.values
-            y = y.values
-                
+            X_train = X_train.values
+            y_train = y_train.values
+            X_test = X_test.values
+            y_test = y_test.values
+        
         else:
-            X = np.load(f"datasets/{self.dir_name}/features.npy")
-            y = np.load(f"datasets/{self.dir_name}/targets.npy")
+            X_train = np.load(f"datasets/{self.dir_name}/features_train.npy")
+            y_train = np.load(f"datasets/{self.dir_name}/targets_train.npy")
+            X_test = np.load(f"datasets/{self.dir_name}/features_test.npy")
+            y_test = np.load(f"datasets/{self.dir_name}/targets_test.npy")
             with open(f"datasets/{self.dir_name}/info.pkl", "rb") as fp:
                 cat_feats = pkl.load(fp)["cat_feats"]
 
-        return X, y, cat_feats
+        return X_train, y_train, X_test, y_test, cat_feats

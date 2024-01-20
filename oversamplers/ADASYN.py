@@ -76,19 +76,24 @@ class ADASYNWrapper(ADASYN):
                 continue
             target_class_indices = np.flatnonzero(y == class_sample)
             X_class = _safe_indexing(X, target_class_indices)
-            num_cat_feats = len(self.encoder.get_feature_names_out())
+            if self.categorical_features > 0:  
+                num_cat_feats = len(self.encoder.get_feature_names_out())
+            else:
+                num_cat_feats = 0
+            #num_cat_feats = self.categorical_features
+
             X_non_cat = X[:, :-num_cat_feats]
             X_cat = X[:, -num_cat_feats:]
 
             self.nn_.fit(X)
 
             nns = self.nn_.kneighbors(X_class, return_distance=False)[:, 1:]
-            #print(y)
             # The ratio is computed using a one-vs-rest manner. Using majority
             # in multi-class would lead to slightly different results at the
             # cost of introducing a new parameter.
             n_neighbors = self.nn_.n_neighbors - 1
             ratio_nn = np.sum(y[nns] != class_sample, axis=1) / n_neighbors
+
             if not np.sum(ratio_nn):
                 raise RuntimeError(
                     "Not any neigbours belong to the majority"
@@ -127,17 +132,22 @@ class ADASYNWrapper(ADASYN):
             
             rng = check_random_state(self.random_state)
 
-            categories_size = [0] + [
-                cat.size for cat in self.encoder.categories_
-            ]
-
+            if self.categorical_features > 0:
+                categories_size = [0] + [
+                    cat.size for cat in self.encoder.categories_
+                ]
+            else:
+                categories_size = [0]
+            
             X_cat_new = X_cat[rows].copy()
             all_neighbors = X_cat[nns[rows]]
+
             for start_idx, end_idx in zip(
                 np.cumsum(categories_size)[:-1], np.cumsum(categories_size)[1:]
             ):  
                 #print(f"From {start_idx} to {end_idx}")
                 col_maxs = all_neighbors[:, :, start_idx:end_idx].sum(axis=1)
+
                 # tie breaking argmax
                 is_max = np.isclose(col_maxs, col_maxs.max(axis=1, keepdims=True))
                 max_idxs = rng.permutation(np.argwhere(is_max))
