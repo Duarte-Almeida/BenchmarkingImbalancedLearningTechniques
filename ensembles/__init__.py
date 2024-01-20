@@ -7,7 +7,7 @@ from .StackedEnsemble import StackedEnsemble
 ensemble_names = {
     #'BalanceBagging':BalanceBaggingWrapper,
     #'EasyEnsemble':EasyEnsembleWrapper,
-    #'MESA':MesaWrapper,
+    'MESA':MesaWrapper,
     'SelfPaced':SelfPacedEnsembleWrapper,
     'StackedEnsemble':StackedEnsemble,
 }

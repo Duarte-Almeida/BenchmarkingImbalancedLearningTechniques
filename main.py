@@ -27,7 +27,7 @@ from imblearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
 import sklearn.model_selection
 from sklearn import metrics
-from TabNetSelfSupervised import TabNetSelfSupervised
+# from TabNetSelfSupervised import TabNetSelfSupervised
 
 import matplotlib.pyplot as plt
 import torch
