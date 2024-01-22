@@ -45,10 +45,10 @@ class CustomCV():
                 X_test, y_test = X_aux[test_index], y_aux[test_index]
                
                 estimator.set_params(**params)
-                try:
-                    estimator.fit(X_train, y_train, *args, **kwargs)
-                except Exception:   # assign score of 0 in case of crash (but not error)
-                    return 0
+                # try:
+                estimator.fit(X_train, y_train, *args, **kwargs)
+                # except Exception:   # assign score of 0 in case of crash (but not error)
+                #     return 0
 
                 probs = estimator.predict_proba(X_test)[:, 1]
                 scores.append(roc_auc_score(y_test, probs))
@@ -72,8 +72,8 @@ class CustomCV():
         print(f"Finding best hyperparameter combinations...")
         print(self.estimator.get_params())
         study = optuna.create_study(direction='maximize', sampler = optuna.samplers.TPESampler(seed = 42))
-        study.enqueue_trial({key: value for (key, value) in self.estimator.get_params().items() \
-                            if key in self.param_distributions.keys()})
+        #study.enqueue_trial({key: value for (key, value) in self.estimator.get_params().items() \
+        #                    if key in self.param_distributions.keys()})
         study.optimize(clf_objective, n_trials = self.n_iter)
 
         self.best_score_ = study.best_value

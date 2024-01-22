@@ -16,20 +16,20 @@ class StackedEnsemble:
         self.undersampler = undersampler
         self.sampling_strategy = sampling_strategy
         self.undersampler.sampling_ratio = sampling_strategy
-        self.N = N
+        self.n_estimators = N
         self.base_estimator = base_estimator
         self.meta_learner = meta_learner
-        self.base_estimators = None
+        self.estimators_ = None
         self.stratified_kf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
         self.kwargs = {}
         self.meta_learner.untoggle_param_grid("all")
 
     
     def fit(self, X, y):
-        self.meta_X = np.zeros((X.shape[0], self.N))
-        self.base_estimators = [copy.copy(self.base_estimator) for _ in range(self.N)]
+        self.meta_X = np.zeros((X.shape[0], self.n_estimators))
+        self.estimators_ = [copy.copy(self.base_estimator) for _ in range(self.n_estimators)]
         
-        for j in range(self.N):
+        for j in range(self.n_estimators):
             #print(f"Subset {j}")
             
             # create j-th subset
@@ -42,7 +42,7 @@ class StackedEnsemble:
             
             X_j, y_j = X[selected_idx], y[selected_idx]
 
-            curr_clf = self.base_estimators[j]
+            curr_clf = self.estimators_[j]
             for train_index, val_index in self.stratified_kf.split(X_j, y_j):   
                 #print(f"A CV fold")
                 X_train, y_train = X_j[train_index], y_j[train_index]
@@ -75,10 +75,10 @@ class StackedEnsemble:
         return np.where(scores <= threshold, 0, 1)
     
     def predict_proba(self, X):
-        meta_X = np.zeros((X.shape[0], self.N))
+        meta_X = np.zeros((X.shape[0], self.n_estimators))
         
-        for i in range(self.N):
-            meta_X[:, i] = self.base_estimators[i].predict_proba(X)[:, 1]
+        for i in range(self.n_estimators):
+            meta_X[:, i] = self.estimators_[i].predict_proba(X)[:, 1]
             
         res = self.meta_learner.predict_proba(meta_X)
         return res
