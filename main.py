@@ -55,9 +55,6 @@ def compute_metrics(estimator, X_train, y_train, X_test, y_test):
 
         aucs.append(auc)
         tprs.append(tpr_score)
-        #print(f"\n")
-        #print(f"AUC: {auc}")
-        #print(f"TPR: {tpr_score}")
         
     return {
         "AUC": np.mean(aucs),
@@ -71,7 +68,7 @@ def compute_metrics(estimator, X_train, y_train, X_test, y_test):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-dataset', default = None,
-                         choices=['baf', 'ieee', 'mlg', 'sparkov'],
+                         choices=['baf', 'mlg'],
                         help="Which dataset should we choose?")
     parser.add_argument('-data_subsampling', default = 0.1,
                         type = float,
@@ -82,9 +79,6 @@ def main():
     parser.add_argument('-undersampling', default = None,
                         choices=['RUS', 'NCR', 'IHT'],
                         help="Which undersampling strategy should we choose?")
-    parser.add_argument('-hybrid', default = None,
-                        choices=["majority", "all"],
-                        help="Which hybrid oversampling/undersammpling strategy should we choose?")
     parser.add_argument('-clf', default = "Base",
                         choices = ["Base"],
                         help="Which classifier should we use?")
@@ -101,7 +95,7 @@ def main():
     parser.add_argument('-simplified', action='store_true',
                         help="Should we consider a simplified base model")
     parser.add_argument('-ensemble', default = None,
-                        choices=['StackedEnsemble', "SelfPaced", "MESA"],
+                        choices=['StackedEnsemble', "SelfPaced"],
                         help="Which ensembling strategy should we apply?")
     parser.add_argument('-n_iter', default = 50, type = int)
     parser.add_argument('-self_supervised', default = False,
@@ -129,7 +123,6 @@ def main():
 
     c_time = None
 
-    # TODO: see this??
     configs = []
 
     if opt.oversampling is not None and opt.undersampling is not None and opt.hybrid is None:
@@ -252,22 +245,10 @@ def main():
     est = search.fit(X_train, y_train)
     end_time = time.time()
 
-    #test_start = time.time()
-    #probs = est.predict_proba(X_test)[:, 1]
-    #train_probs = est.predict_proba(X_train)[:, 1]
-
-    #th = search.th#thresholds.fetch_threshold(opt.threshold, y_train, train_probs)
-    #th = thresholds.compute_FPR_cutoff(y_test, probs)
-    #y_pred = est.predict(X_test, **{"th":th})
-    #test_end = time.time()
-    #test_time = test_end - test_start
-
     metrics = compute_metrics(est, X_train, y_train, X_test, y_test)
 
     total_time = end_time - start_time
-    #print(f'Ended training in {round(total_time, 2)} seconds.\n')
     
-    # TODO: add more conditions in the future
     if opt.loss is None and opt.ensemble is None:
         metric_file = "preprocessing"
     
