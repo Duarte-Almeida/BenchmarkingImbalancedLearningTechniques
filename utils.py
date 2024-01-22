@@ -7,12 +7,10 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import roc_auc_score, roc_curve
 import pickle
 import sys
-from datasets import BAFHandler, IEEEHandler, MLGHandler, SparkovHandler
+from datasets import BAFHandler, MLGHandler
 
 datasets = {"baf": BAFHandler(),
-            "ieee": IEEEHandler(),
-            "mlg": MLGHandler(),
-            "sparkov": SparkovHandler()}
+            "mlg": MLGHandler()}
 
 orders = {
     "preprocessing": ["Base", "Oversamplers", "Undersamplers", "Hybrid"],

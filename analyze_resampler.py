@@ -178,7 +178,7 @@ def main():
     np.random.seed(42)
     # Argument parser
     parser = argparse.ArgumentParser(description="Analyze oversampling results.")
-    parser.add_argument("-dataset", choices=["Base", "baf", "ieee", "mlg"], required=True,
+    parser.add_argument("-dataset", choices=["Base", "baf", "mlg"], required=True,
                         help="Dataset name.")
     args = parser.parse_args()
 
