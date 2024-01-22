@@ -10,18 +10,20 @@ from scipy import special
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score, roc_curve, auc
 
-def estimator_prediction(estimator, predictions, X_test, aggregate):
+def estimator_prediction(estimator, predictions, X_test, aggregate, j):
     predictions[:, j] = estimator.predict_proba(X_test)[:, 1]
+    print(predictions[:, j])
     if aggregate:
         aggregated_preds = np.mean(predictions[:, :j+1], axis=1)
     else:
         aggregated_preds = predictions[:, j]
+    print("-----")
     
     th = thresholds.compute_FPR_cutoff(y_test, aggregated_preds)
 
     y_pred = (aggregated_preds > th).astype(int)
 
-    return y_pred, aggregated_preds
+    return y_pred, aggregated_preds, predictions
 
 
 np.random.seed(42)
@@ -62,11 +64,11 @@ for (i, ens) in enumerate(ens_clfs):
     ens.fit(X_train, y_train)
 
     # For SelfPaced & MESA (mesa also has the meta training)
-    predictions = np.zeros((X_test.shape[0], len(ens.estimators_)))
+    predictions = np.zeros((X_test.shape[0], len(ens.estimators_)+1))
 
     for j in range(ens.n_estimators):
-        y_pred, aggregated_preds = estimator_prediction(
-            ens.estimators_[j], predictions, X_test, ens_names[i] != "StackedEnsemble")
+        y_pred, aggregated_preds, predictions = estimator_prediction(
+            ens.estimators_[j], predictions, X_test, ens_names[i] != "StackedEnsemble", j)
 
         y_preds[i].append(aggregated_preds)
         aucs[i].append(roc_auc_score(y_test, aggregated_preds))
@@ -83,8 +85,8 @@ for (i, ens) in enumerate(ens_clfs):
         for j in range(ens.n_estimators):
             meta_X[:, j] = y_preds[i][j]
 
-        _, aggregated_preds = estimator_prediction(
-            ens.meta_learner, predictions, meta_X, False)
+        _, aggregated_preds, predictions = estimator_prediction(
+            ens.meta_learner, predictions, meta_X, False, -1)
         y_preds[i].append(aggregated_preds)
 
 save_dir = 'analysis/'
@@ -123,8 +125,9 @@ for i in range(len(aucs)):
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 8))
 
         ax1.plot(range(1, len(aucs[i])+1), aucs[i], label=f'AUC ({ens_names[i]})', marker='o')
+        ax1.set_xlabel('Iteration Number')
         ax1.set_ylabel('AUC')
-        ax1.set_title(f'AUC and TPR vs. Iteration Number for {ens_names[i]}')
+        ax1.set_title(f'AUC and TPR vs. Iteration Number for {ens_names[i-1]}&{ens_names[i]}')
         ax1.grid(True)
 
         ax2.plot(range(1, len(tprs[i])+1), tprs[i], label=f'TPR ({ens_names[i]})', marker='o')
@@ -134,7 +137,8 @@ for i in range(len(aucs)):
 
         first = False
 
-plt.legend()
+ax1.legend()
+ax2.legend()
 plt.tight_layout()
 
 save_path = os.path.join(save_dir, f'Ensemble_{ens_names[i-1]}&{ens_names[i]}_{dataset}.png')

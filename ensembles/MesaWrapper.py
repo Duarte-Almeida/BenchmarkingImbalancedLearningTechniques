@@ -40,21 +40,21 @@ class MesaWrapper(Mesa):
         args.batch_size = 64
 
         self.grid = {
-            #'lr': ('suggest_loguniform', 1e-4, 1e-1),
-            #'gamma': ('suggest_uniform', 0.9, 0.999),
-            #'tau': ('suggest_uniform', 0.001, 0.1),
-            #'batch_size': ('suggest_int', 32, 128),
-            #'hidden_size': ('suggest_int', 20, 100),
-            #'updates_per_step': ('suggest_int', 1, 5),
-            #'target_update_interval': ('suggest_int', 1, 10),
-            #'replay_size': ('suggest_int', 500, 5000),
-            #'reward_coefficient': ('suggest_uniform', 50, 150),
+            'lr': ('suggest_loguniform', 1e-4, 1e-1),
+            'gamma': ('suggest_uniform', 0.9, 0.999),
+            'tau': ('suggest_uniform', 0.001, 0.1),
+            'batch_size': ('suggest_int', 32, 128),
+            'hidden_size': ('suggest_int', 20, 100),
+            'updates_per_step': ('suggest_int', 1, 5),
+            'target_update_interval': ('suggest_int', 1, 10),
+            'replay_size': ('suggest_int', 500, 5000),
+            'reward_coefficient': ('suggest_uniform', 50, 150),
             #'num_bins': ('suggest_int', 5, 100),
-            #'sigma': ('suggest_uniform', 0.1, 0.5),
+            'sigma': ('suggest_uniform', 0.1, 0.5),
             'num_estimators': ('suggest_int', 5, 20),
-            #'max_estimators': ('suggest_int', 5, 20),
-            #'train_ir': ('suggest_uniform', 0.5, 1.5),
-            #'train_ratio': ('suggest_uniform', 0.8, 1.0)
+            'max_estimators': ('suggest_int', 5, 20),
+            'train_ir': ('suggest_uniform', 0.5, 1.5),
+            'train_ratio': ('suggest_uniform', 0.8, 1.0)
         }
 
         self.param_names = [key for key in self.grid.keys()]
