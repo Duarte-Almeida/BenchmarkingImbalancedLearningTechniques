@@ -1,19 +1,13 @@
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.datasets import fetch_openml
 import oversamplers
-import datasets
-import utils
-from sklearn.utils import check_random_state
 from pomegranate import BayesianNetwork
 import pickle as pkl
 from mdlp import MDLP
 import os
 import sys
-from sklearn.preprocessing import KBinsDiscretizer, OneHotEncoder
-from pgmpy.estimators import TreeSearch
-from scipy.stats import entropy
+from sklearn.preprocessing import OneHotEncoder
 import FaissKNN
 
 
@@ -45,7 +39,6 @@ def load_results(dataset_name, oversampling_method):
     return data['train_tpr'], data['test_tpr'], data['train_auc'], data['test_auc']
 
 def compute_probabilities(X, probs, priors, structure):
-    #print(f"Computing probabilities...")
     X_nr = X[:, 1:]
     X_r = X[:, [0]]
     X_r_val_dep = X_r.astype(int)
@@ -59,9 +52,6 @@ def compute_probabilities(X, probs, priors, structure):
 
     for j in range(X_nr.shape[1]):
         ft = features_nr[j]
-        #print(f"Feature {ft}")
-        #print(f"With parent {depend[ft]}")
-        #print(np.unique(X[:, ft]))
         rows = X_nr_val_dep[:, j, 1]
         cols = X_nr_val_dep[:, j, 0]
         init_probs_nr[:, j] = probs[ft][X_nr_val_dep[:, j, 1], X_nr_val_dep[:, j, 0]]
@@ -76,26 +66,18 @@ def calculate_kl_divergence(X_test, probs_sub, priors_sub, structure_sub, probs_
     sub_probs = compute_probabilities(X_test, probs_sub, priors_sub, structure_sub)
     o_probs = compute_probabilities(X_test, probs_o, priors_o, structure_o)
 
-    #print(f"Probs: {sub_probs}")
-    #print(f"Other Probs: {o_probs}")
-
     return np.mean(np.log(sub_probs / o_probs))
 
 def plot_metric(ax, oversampling_method, train_values, test_values, metric_name):
-    # Compute mean values
     mean_train = np.mean(train_values)
     mean_test = np.mean(test_values)
 
-    # Plot train values as a blue cross
     ax.plot([oversampling_method], [mean_train], marker='x', markersize=10, label='Train', color='blue')
 
-    # Plot test values as a red circle
     ax.plot([oversampling_method], [mean_test], marker='o', markersize=10, label='Test', color='red')
 
-    # Connect train and test values with a dashed line
     ax.plot([oversampling_method, oversampling_method], [mean_train, mean_test], linestyle='--', color='gray')
 
-    # Set labels and title
     ax.set_ylabel(metric_name)
     ax.set_title(f"{metric_name} - Train/Test Comparison")
     ax.legend()
@@ -128,18 +110,14 @@ def estimate_model(X, X_all):
         all_dicts[j] = dict(zip(keys, fi))
     N = X.shape[0]
     priors = []
-    #print(f"estimating priors")
     for j in range(X_aux.shape[1]):
         X_class = X_aux[:, j]
         counts = [X_class[X_class == val].shape[0] for val in sorted(all_dicts[j].keys())]
         probs = np.array(counts) / np.sum(np.array(counts))
         probs[probs == 0] = eps
         priors.append(probs)
-    #print(f"finishing priors")
-    #print(f"estimating structure")
     bayes = BayesianNetwork.from_samples(X_aux, algorithm='chow-liu', root=0)
 
-    #print(f"finished structure")
     depend = []
     for i in bayes.structure:
         if i:
@@ -147,7 +125,6 @@ def estimate_model(X, X_all):
         else:
             depend.append(-1)
     
-    #print("estimating cpds")
     probs = []  # np.empty(X.shape[1], dtype='object')
     for j in range(len(depend)):
 
@@ -169,27 +146,21 @@ def estimate_model(X, X_all):
                     fp[k, l] = numi / den
 
         probs.append(fp)
-    #print("finished cpds")
 
     return probs, priors, depend
 
 def main():
 
     np.random.seed(42)
-    # Argument parser
     parser = argparse.ArgumentParser(description="Analyze oversampling results.")
     parser.add_argument("-dataset", choices=["Base", "baf", "mlg"], required=True,
                         help="Dataset name.")
     args = parser.parse_args()
 
-    # Fetch dataset
     X_train, y_train, X_test, y_test, cat_feats = load_data(args.dataset)
 
-    # Oversampling methods
     oversampling_methods = ["Base", "SMOTE", "ADASYN", "KMeansSMOTE", "RACOG"]
 
-    
-    # Dict to store KL divergence results
     kl_divergence_results = {method: [] for method in oversampling_methods}  # Exclude "Base"
 
     probs_histograms = {method: [] for method in oversampling_methods}
@@ -222,8 +193,6 @@ def main():
         sub_probs = compute_probabilities(X_sub, probs_sub, priors_sub, structure_sub)
         probs_histograms["Base"].append(sub_probs)
 
-        #sys.exit()
-
         X_test, y_test = subsample_data(X_train, y_train, 0.1, 42)
         X_test_p, y_test_p = X_test[y_test == 1], y_test[y_test == 1]
         X_test = disc.transform(X_test_p, y_test_p).astype(int)
@@ -252,7 +221,6 @@ def main():
             kl_divergence = calculate_kl_divergence(X_test, probs_sub, priors_sub, structure_sub, probs_o, priors_o, structure_o)
             kl_divergence_results[oversampling_method].append(kl_divergence)
             print(f"KL divergence: {kl_divergence}")
-            #sys.exit()
 
 
     # Get the number of oversampling methods
@@ -261,11 +229,8 @@ def main():
 
     for i, method in enumerate(oversampling_methods[1:]):
         print(f"{i}")
-        #print(f"Exploring {method}")
         base_probs = probs_histograms["Base"]
         method_probs = probs_histograms[method]
-        #print(f"And probabilities {method_probs}")
-        #minimum = np.min([np.min(hist) for hist in base_probs] + [np.min(hist) for hist in method_probs])
         maximum = np.max([np.max(hist) for hist in base_probs] + [np.max(hist) for hist in method_probs])
 
         n_bins = 50
@@ -289,18 +254,14 @@ def main():
         method_histogram /= (n_iter)
         base_histogram /= (n_iter)
 
-        # Define the x values
         x_values_base = np.linspace(0, maximum, n_bins)
         x_values_method = np.linspace((maximum / (n_bins)), maximum + (maximum / (n_bins)), n_bins)
 
-        # Plotting the histograms with alpha=0.5 and log scale on y-axis
         plt.bar(x_values_base, base_histogram, alpha=0.5, width = maximum / (2 * n_bins), label='Base', align = "edge")
         plt.bar(x_values_method, method_histogram, alpha=0.5, width = -maximum / (2 * n_bins), label=f'{method}', align = "edge")
 
-        # Add title to each subplot
         plt.title(method)
 
-        # Set axis labels
         plt.xlabel('Density')
         plt.ylabel('Probability')
 
@@ -312,7 +273,6 @@ def main():
     plt.figure(figsize=(10, 6))
     plt.boxplot([kl_divergence_results[method] for method in kl_divergence_results.keys()],
                 labels=list(kl_divergence_results.keys()))
-    #plt.title('KL Divergence for Different Oversampling Methods')
     plt.xlabel('Oversampling Methods')
     plt.ylabel('KL Divergence')
     plt.savefig(f"analysis/KL_oversamplers.pdf")
@@ -341,19 +301,15 @@ def main():
         X_sub_n = X_sub_encoded[n_idx]
         knn.fit(X_sub_encoded)
 
-        # Find distances and indices of k nearest neighbors for all examples
         distances, indices = knn.kneighbors(X_sub_n)
 
-        # Exclude the first index (itself) and count positive neighbors
         counts_sub = np.bincount(np.sum(y_sub_o[indices[:, 1:]] == 1, axis=1))
         counts_sub = np.concatenate((counts_sub, np.zeros(11 - counts_sub.shape[0])))
         print(counts_sub)
         counts_sub /= np.sum(counts_sub)
 
-        # Extract counts for negative examples
         print(f"Here is the result for Base: {counts_sub}")
         nn_histograms["Base"] += counts_sub
-        #sys.exit()
 
         for oversampling_method, oversampler in oversamplers_instances.items():
             print(f"Oversampling {oversampling_method}")
@@ -385,32 +341,25 @@ def main():
         maximum = 10
         n_bins = 10
 
-        # Define the x values
         x_values_base = np.linspace(0, maximum, n_bins + 1)
         x_values_method = np.linspace(0, maximum, n_bins + 1)
 
         print(f"{x_values_base}")
         print(f"{x_values_method}")
 
-        # Plotting the histograms with alpha=0.5
         plt.bar(x_values_base, base_probs, alpha=0.5, width = -maximum / (2 * n_bins * 1.5), label='Base', align = "edge")
         plt.bar(x_values_method, method_probs, alpha=0.5, width = maximum / (2 * n_bins * 1.5), label=f'{method}', align = "edge")
 
-        # Add legend
         plt.legend()
 
-        # Set the ticks on the x-axis
         plt.xticks(np.arange(0, maximum + 1, 1))
         plt.yscale('log')
 
-        # Add title to each subplot
         plt.title(method)
 
-        # Set axis labels
         plt.xlabel('Density')
         plt.ylabel('# of positive NN')
 
-        # Show the plot
         plt.savefig(f"analysis/{method}_KNN.pdf")
         plt.clf()
     

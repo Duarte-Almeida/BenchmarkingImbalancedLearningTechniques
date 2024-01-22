@@ -80,7 +80,6 @@ class ADASYNWrapper(ADASYN):
                 num_cat_feats = len(self.encoder.get_feature_names_out())
             else:
                 num_cat_feats = 0
-            #num_cat_feats = self.categorical_features
 
             X_non_cat = X[:, :-num_cat_feats]
             X_cat = X[:, -num_cat_feats:]
@@ -145,7 +144,6 @@ class ADASYNWrapper(ADASYN):
             for start_idx, end_idx in zip(
                 np.cumsum(categories_size)[:-1], np.cumsum(categories_size)[1:]
             ):  
-                #print(f"From {start_idx} to {end_idx}")
                 col_maxs = all_neighbors[:, :, start_idx:end_idx].sum(axis=1)
 
                 # tie breaking argmax

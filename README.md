@@ -46,6 +46,8 @@ The possible choices are:
 - `-ensemble`: `StackedEnsemble` | `SelfPaced`;
 - `-n_iter`: positive integer value (default = 50);
 
+We recommend using Python 3.7.
+
 A `dataset` must be chosen manually. [BAF](https://www.kaggle.com/datasets/sgpjesus/bank-account-fraud-dataset-neurips-2022/data) and [MLG](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud/data) are two datasets from Kaggle. Only on the first time will the dataset be fetched from Kaggle. In subsequent executions, it will be stored in memory.
 
 `data_subsampling` determines the amount of training examples to retain from the original training set (useful for very big datasets)

@@ -1,11 +1,6 @@
 import utils
-import pickle as pkl
 from functools import *
-from classifiers import LGBM
-import losses
 import numpy as np
-from scipy import special
-import matplotlib.pyplot as plt
 from sklearn.preprocessing import OneHotEncoder
 import optuna
 import classifiers
@@ -19,10 +14,6 @@ data = utils.fetch_data(dataset)
 X_train, y_train = data["train"]
 X_test, y_test = data["test"]
 cat_feats = data["cat_feats"]
-
-#sub_idx = np.random.choice(X_train.shape[0], size = int(X_train.shape[0] * 0.1), replace = False)
-#X_train = X_train[sub_idx]
-#y_train = y_train[sub_idx]
 
 encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
 X_train_cat = encoder.fit_transform(X_train[:, -len(cat_feats):])

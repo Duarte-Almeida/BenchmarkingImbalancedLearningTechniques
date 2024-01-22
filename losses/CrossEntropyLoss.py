@@ -47,10 +47,7 @@ class CrossEntropyLoss:
         return res
 
     def hess(self, y_true, y_pred):
-        #y_pred = np.clip(y_pred, 1e-15,  1 - 1e-15)
-        #hessian = y_pred * (1 - y_pred)
         hessian = 1e-10 * np.ones_like(y_true)
-        #hessian[y_true == 1] =
         return hessian.reshape(y_true.shape)
 
     def init_score(self, y_true):
@@ -94,18 +91,15 @@ class CrossEntropyLoss:
                 self.freeze.append(name)
     
     def untoggle_param_grid(self, name):
-        #print(f"Untoggling {name} in {self.grid.keys()} and {self.freeze}")
         if name == "all":
             self.freeze = []
         if name in self.grid.keys() and name in self.freeze:
-            #print(f"Untoggled {name}!")
             self.freeze.remove(name)
         
     def parameter_grid(self):
         res = {}
         for name in self.grid.keys():
             if name not in self.freeze:
-                #print(f"Updating {self.grid[name]}")
                 res.update(self.grid[name])
         return res
 

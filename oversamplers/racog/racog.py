@@ -169,8 +169,6 @@ class RACOG(BaseOverSampler):
         
         self.i_continuous = np.array([i for i in range(X.shape[1]) if i not in self.i_categorical])
 
-        #print(f"These are my categorical features: {self.i_categorical}")
-
         # perform discretization
         continuous = self.i_continuous
         if continuous.size != 0:
@@ -180,7 +178,6 @@ class RACOG(BaseOverSampler):
 
             # consider subsampled dataset in discretization process to speedup
             if (X.shape[0] > MAX_DATASET_SIZE):
-                #np.random.seed(self.random_state)
                 idx = np.random.choice(X.shape[0], size = MAX_DATASET_SIZE, replace = False)
                 X_sub = X_di[idx]
                 y_sub = y[idx]
@@ -189,27 +186,6 @@ class RACOG(BaseOverSampler):
             sys.stdout = sys.__stdout__
             X_di = self.disc.transform(X_di, y)
             X_di = X_di.astype(int)
-            #for i in range(X_di.shape[1]):
-            #    if i in self.i_categorical:
-            #        continue
-            #    print(np.unique(X_di[:, [i]]))
-
-            '''
-            self.disc = KBinsDiscretizer(encode = "ordinal", strategy = "uniform")
-
-            sys.stdout = open(os.devnull, 'w')
-            self.i_continuous = np.array([i for i in range(X_di.shape[1]) if i not in self.i_categorical])
-            self.disc.fit(X_di[:, self.i_continuous], y[self.i_continuous])
-            sys.stdout = sys.__stdout__
-            #X_di = X_sub.copy()
-            X_di[:, self.i_continuous] = self.disc.transform(X_di[:, self.i_continuous])
-            X_di = X_di.astype(int)
-            for i in range(X_di.shape[1]):
-                if i in self.i_categorical:
-                    continue
-                print(np.unique(X_di[:, [i]]))
-            '''
-            
 
         # initialize tree structure, prior and conditional probability tables
         self.probs = {}
@@ -249,7 +225,6 @@ class RACOG(BaseOverSampler):
         continuous = self.i_continuous
         if continuous.size != 0:
             X_di = self.disc.transform(X)
-            #X_di[:, self.i_continuous] = self.disc.transform(X[:, self.i_continuous])
 
         for class_sample, n_samples in self.sampling_strategy_.items():
             if n_samples < self.threshold:
@@ -333,7 +308,6 @@ class RACOG(BaseOverSampler):
             lower[edge_indices] = min_j
             lower[non_edge_indices] = cut_points[j][X_sampled_j[non_edge_indices] - 1]
 
-            #np.random.seed(self.random_state)
             X_recon[:, j] = lower + np.random.uniform() * (upper - lower)
 
         return X_recon
@@ -343,7 +317,7 @@ class RACOG(BaseOverSampler):
         Run Gibbs samplers in parallel
         """
         m = X_class.shape[1]
-        n_jobs = self.n_jobs  # Assuming n_jobs is an attribute of your class
+        n_jobs = self.n_jobs
 
         params = {'vlist': vlist,
                   'depend': depend,
@@ -367,8 +341,6 @@ class RACOG(BaseOverSampler):
         
         return X_new.astype(int)
         
-        #return X_new.astype(int)
-
     def _all_keys(self, X, eps=0.00001):
         """
         Get all possible values for each feature
@@ -506,9 +478,7 @@ class RACOG(BaseOverSampler):
                     curr_probs = curr_probs / old_priors
                     probs_aux = np.outer(curr_probs, new_priors)
                     probs_aux = probs_aux / np.sum(probs_aux, axis = 1)[:, np.newaxis]
-                    #print(probs_aux)
 
-                    #probs_aux = np.repeat([new_priors], repeats = Zi.shape[0], axis = 0)
                     if (np.any(np.sum(probs_aux, axis = 1)[:, np.newaxis] == 0)):
                         print("One")
                         print(t)
@@ -588,15 +558,11 @@ class RACOG(BaseOverSampler):
         if isinstance(X, pd.DataFrame):
             new_index = X.index.values
             for i in range(num):
-                #if random_state is not None:
-                    #np.random.seed(random_state + i)
                 new_index = np.random.permutation(new_index)
             X.reindex(new_index)
             y.reindex(new_index)
         else:
             for i in range(num):
-                #if random_state is not None:
-                    #np.random.seed(random_state + i)
                 new_index = np.random.permutation(new_index)
                 X = X[new_index]
                 y = y[new_index]

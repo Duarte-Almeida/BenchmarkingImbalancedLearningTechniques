@@ -75,7 +75,6 @@ class MLGHandler():
             if X.shape[1] > 50:
                 print(f"Performing variable selection based on Extra Trees Classifier")
 
-                # Splitting the data into training and validation sets
                 X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.2, random_state=42, shuffle = True)
                 extra_trees = ExtraTreesClassifier(n_estimators=100, random_state=42)
                 extra_trees.fit(X_train, y_train)
@@ -103,7 +102,7 @@ class MLGHandler():
                 
                 importances = extra_trees.feature_importances_
                 indices = np.argsort(importances)[::-1]
-                sfm = SelectFromModel(extra_trees, threshold='median', prefit = True)  # You can adjust the threshold if needed
+                sfm = SelectFromModel(extra_trees, threshold='median', prefit = True)
 
                 # Transform the dataset to only include important features
                 X_selected_train = sfm.transform(X_train)

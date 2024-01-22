@@ -112,7 +112,7 @@ class BAFHandler():
                 
                 importances = extra_trees.feature_importances_
                 indices = np.argsort(importances)[::-1]
-                sfm = SelectFromModel(extra_trees, threshold='median', prefit = True)  # You can adjust the threshold if needed
+                sfm = SelectFromModel(extra_trees, threshold='median', prefit = True)
 
                 # Transform the dataset to only include important features
                 X_selected_train = sfm.transform(X_train)

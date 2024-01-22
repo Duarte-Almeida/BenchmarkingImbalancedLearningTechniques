@@ -44,17 +44,6 @@ class FocalLoss:
         return at * y * (1 - pt) ** g * (g * pt * np.log(pt) + pt - 1)
 
     def hess(self, y_true, y_pred):
-        #y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15)
-        #y = 2 * y_true - 1
-        #at = self.at(y_true)
-        #pt = self.pt(y_true, y_pred)
-        #g = self.gamma
-        #u = at * y * (1 - pt) ** g
-        #du = -at * y * g * (1 - pt) ** (g - 1)
-        #v = g * pt * np.log(pt) + pt - 1
-        #dv = g * np.log(pt) + g + 1
-        #hess = (du * v + u * dv) * y * (pt * (1 - pt))
-        #hess[hess < 0] = 0
         hess = np.ones_like(y_true) * 1e-10
         return hess
 

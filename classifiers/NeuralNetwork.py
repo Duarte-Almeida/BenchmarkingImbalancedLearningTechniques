@@ -32,24 +32,19 @@ class NeuralNetwork:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def fit(self, X, y, batch_size=32, epochs=10):
-        # Convert data to PyTorch tensors and move to device
         X_tensor = torch.FloatTensor(X).to(self.device)
         y_tensor = torch.FloatTensor(y).unsqueeze(1).to(self.device)  # Assuming y is 1D array
 
-        # Split the data into training and validation sets
         X_train, X_val, y_train, y_val = train_test_split(X_tensor, y_tensor, test_size=0.2, random_state=42)
 
-        # Create DataLoader for batching
         train_dataset = TensorDataset(X_train, y_train)
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-        # Initialize model and optimizer
         input_dim = X_tensor.shape[1]
         self.model = SimpleNN(input_dim, self.num_hidden_layers, self.dropout_prob).to(self.device)
         criterion = nn.BCEWithLogitsLoss()
         optimizer = optim.Adam(self.model.parameters())
 
-        # Training loop with tqdm progress bar
         for epoch in range(epochs):
             self.model.train()
             progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{epochs}", leave=False)
@@ -62,7 +57,7 @@ class NeuralNetwork:
                 progress_bar.set_postfix(loss=loss.item())
 
     def predict_proba(self, X):
-    # Convert data to PyTorch tensor and move to device
+        # Convert data to PyTorch tensor and move to device
         X_tensor = torch.FloatTensor(X).to(self.device)
 
         # Predict logits

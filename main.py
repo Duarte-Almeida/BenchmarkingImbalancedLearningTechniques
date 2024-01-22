@@ -13,18 +13,10 @@ import classifiers
 import ensembles
 from CustomCV import CustomCV
 
-import lightgbm as lgb
 import numpy as np
-import pandas as pd
-import scipy
-from sklearn.base import clone
-from sklearn.utils import _print_elapsed_time
-from sklearn.utils.validation import check_memory
 import sklearn.metrics
 from imblearn.pipeline import Pipeline
-from sklearn.base import BaseEstimator, TransformerMixin
 import sklearn.model_selection
-from sklearn import metrics
 import sklearn.utils
 
 import matplotlib.pyplot as plt
@@ -94,6 +86,9 @@ def main():
                         choices=['StackedEnsemble', "SelfPaced"],
                         help="Which ensembling strategy should we apply?")
     parser.add_argument('-n_iter', default = 50, type = int)
+
+    # Deprecated
+    parser.add_argument('-hybrid')
 
     opt = parser.parse_args()
 

@@ -128,7 +128,6 @@ class LGBM(BaseEstimator, ClassifierMixin):
             return self
         attr_params = {}
         for key, value in params.items():
-            #print(f"Will set {key} to {value}")
             if '__' in key:
                 idx = key.find('__')
                 attr = key[:idx]

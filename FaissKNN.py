@@ -3,9 +3,6 @@ from scipy.sparse import csr_matrix
 from sklearn.neighbors._base import NeighborsBase, KNeighborsMixin
 from sklearn.utils.validation import check_array
 import faiss
-from scipy import sparse
-from scipy.stats import randint
-from skopt import space
 
 class FaissKNN(NeighborsBase, KNeighborsMixin):
 
@@ -49,7 +46,6 @@ class FaissKNN(NeighborsBase, KNeighborsMixin):
         for i in range(self.n_neighbors):
             weighted_votes += np.eye(len(np.unique(self.y_)))[self.y_[I[:, i]]] * weights[:, i][:, np.newaxis]
 
-        # Assign the class with the maximum weighted sum as the prediction
         predictions = np.argmax(weighted_votes, axis=1)
         
         return predictions

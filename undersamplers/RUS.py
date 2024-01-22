@@ -31,7 +31,6 @@ class RUSWrapper(RandomUnderSampler):
 
         if self.cls == "majority":
             self.sampling_strategy = min(1, IR + self.sampling_ratio * (1 - IR) + eps)
-            #print(f"My sampling strategy is {self.sampling_strategy}")
             num_samples = int(pos / self.sampling_strategy)
             print(f"Will only use {num_samples} out of {neg}")
             neg_idx = np.where(y == 0)[0]

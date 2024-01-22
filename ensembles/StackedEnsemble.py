@@ -29,9 +29,7 @@ class StackedEnsemble:
         self.meta_X = np.zeros((X.shape[0], self.n_estimators))
         self.estimators_ = [copy.copy(self.base_estimator) for _ in range(self.n_estimators)]
         
-        for j in range(self.n_estimators):
-            #print(f"Subset {j}")
-            
+        for j in range(self.n_estimators):            
             # create j-th subset
             self.undersampler.fit_resample(X, y)
 
@@ -44,7 +42,6 @@ class StackedEnsemble:
 
             curr_clf = self.estimators_[j]
             for train_index, val_index in self.stratified_kf.split(X_j, y_j):   
-                #print(f"A CV fold")
                 X_train, y_train = X_j[train_index], y_j[train_index]
                 curr_clf.fit(X_train, y_train)
                 curr_idx = selected_idx[val_index]

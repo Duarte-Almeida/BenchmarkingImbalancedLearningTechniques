@@ -1,17 +1,9 @@
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import ParameterGrid, PredefinedSplit, RandomizedSearchCV
-from itertools import product
-from sklearn.metrics import make_scorer, roc_auc_score, roc_curve
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
-from imblearn.pipeline import Pipeline
-from skopt import BayesSearchCV
 import optuna
-import matplotlib.pyplot as plt
 from functools import partial
-import pickle as pkl
-
-import sys
 
 
 class CustomCV():
@@ -89,5 +81,4 @@ class CustomCV():
             attr_name = attr[idx + 2:]
             self.best_estimator_.named_steps[component].set_params(**{attr_name: value})
 
-        #self.best_estimator_.fit(X, y)
         return self.best_estimator_

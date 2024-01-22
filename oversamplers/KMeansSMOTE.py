@@ -29,9 +29,6 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
         }
 
     def fit_resample(self, X, y):
-
-        #print(f"Here is my threshold: {self.cluster_balance_threshold}")
-
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
         if isinstance(y, pd.Series):
@@ -105,13 +102,11 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
                 for param in self._get_param_names()}
     
     def set_params(self, **params):
-        #print(f"Setting params {params}")
         if not params:
             return self
         attr_params = {}
         for key, value in params.items():
             if '__' in key:
-                #print(f"Setting sub parameter")
                 idx = key.find('__')
                 attr = key[:idx]
                 attr_param = key[idx + 2:]
@@ -120,10 +115,8 @@ class KMeansSMOTEWrapper(KMeansSMOTE):
                         attr_params[attr] = {}
                     attr_params[attr][attr_param] = value
             elif hasattr(self, key):
-                #print(f"Setting parameter")
                 setattr(self, key, value)
             else:
-                #print(f"Do not have parameter!")
                 self.kwargs[key] = value
 
         for attr, attr_dict in attr_params.items():
