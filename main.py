@@ -61,7 +61,7 @@ def main():
     parser.add_argument('-dataset', default = None,
                          choices=['baf', 'mlg'],
                         help="Which dataset should we choose?")
-    parser.add_argument('-data_subsampling', default = 0.1,
+    parser.add_argument('-data_subsampling', default = 1,
                         type = float,
                         help="By how much should the dataset be reduced?")
     parser.add_argument('-oversampling', default = None,
