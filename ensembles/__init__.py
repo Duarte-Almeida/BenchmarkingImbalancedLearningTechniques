@@ -1,9 +1,7 @@
-from .MesaWrapper import MesaWrapper
 from .SelfPacedEnsembleWrapper import SelfPacedEnsembleWrapper
 from .StackedEnsemble import StackedEnsemble
 
 ensemble_names = {
-    'MESA':MesaWrapper,
     'SelfPaced':SelfPacedEnsembleWrapper,
     'StackedEnsemble':StackedEnsemble,
 }

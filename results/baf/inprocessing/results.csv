@@ -1,9 +1,9 @@
-type,name,Precision,Recall,F1 score,False Positive Rate,False Negative Rate,AUC,Train time,Test time
-Base,Base,0.1006,0.5225,0.1687,0.0498,0.4775,0.8881,590.58,0.53
-Losses,FocalLoss,0.1013,0.5263,0.1699,0.0498,0.4737,0.8894,851.65,0.41
-Losses,GradientHarmonized,0.1009,0.5244,0.1693,0.0498,0.4756,0.8889,978.69,0.54
-Losses,LabelRelaxation,0.1004,0.5225,0.1684,0.0499,0.4775,0.8882,780.02,0.48
-Losses,LabelSmoothing,0.1009,0.5258,0.1693,0.05,0.4742,0.888,765.69,0.41
-Losses,WeightedCrossEntropy,0.0082,0.0128,0.01,0.0166,0.9872,0.6705,11.78,0.33
-Ensembles,SelfPaced,0.1004,0.5235,0.1685,0.05,0.4765,0.8862,1366.99,6.63
-Ensembles,StackedEnsemble,0.0972,0.5002,0.1628,0.0495,0.4998,0.8802,7770.35,10.74
+type,name,Precision,Recall,F1 score,False Positive Rate,False Negative Rate,AUC,Train time,Test time,TPR,TPR_std,AUC_std,Time
+Losses,FocalLoss,0.1013,0.5263,0.1699,0.0498,0.4737,0.8894,851.65,0.41,,,,
+Losses,GradientHarmonized,0.1009,0.5244,0.1693,0.0498,0.4756,0.8889,978.69,0.54,,,,
+Losses,LabelRelaxation,0.1004,0.5225,0.1684,0.0499,0.4775,0.8882,780.02,0.48,,,,
+Losses,LabelSmoothing,0.1009,0.5258,0.1693,0.05,0.4742,0.888,765.69,0.41,,,,
+Losses,WeightedCrossEntropy,0.0082,0.0128,0.01,0.0166,0.9872,0.6705,11.78,0.33,,,,
+Ensembles,SelfPaced,0.1004,0.5235,0.1685,0.05,0.4765,0.8914,1366.99,6.63,0.5341,0.0227,0.0067,-1.4402
+Ensembles,StackedEnsemble,0.0972,0.5002,0.1628,0.0495,0.4998,0.8916,7770.35,10.74,0.5292,0.022,0.0066,-106.0016
+,Base,0.1006,0.5225,0.1687,0.0498,0.4775,0.8881,590.58,0.53,,,,

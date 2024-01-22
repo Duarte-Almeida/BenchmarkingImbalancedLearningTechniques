@@ -1,2 +1,0 @@
-type,name,Precision,Recall,F1 score,False Positive Rate,False Negative Rate,AUC,Train time,Test time
-Losses,FocalLoss,0.5735,0.7841,0.6624,0.0496,0.2159,0.9397,225.03,1.47
