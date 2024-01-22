@@ -176,7 +176,7 @@ def main():
         if name.startswith("Base"):
             name = name[5:]
         clf.set_params(**{"loss_fn": loss})
-        clf.untoggle_param_grid("loss")
+        # clf.untoggle_param_grid("loss")
         clf.untoggle_param_grid("clf")
 
     if opt.ensemble is not None:
@@ -195,7 +195,7 @@ def main():
         for (parameter, values) in clf.parameter_grid().items():
             param_grid["clf__" + str(parameter)] = values
     
-    clf.untoggle_param_grid("clf")
+    # clf.untoggle_param_grid("clf")
     
     pipeline = Pipeline(steps=steps)
 
