@@ -8,7 +8,6 @@ import pickle
 import utils
 import oversamplers
 import undersamplers
-import thresholds
 import losses
 import classifiers
 import ensembles
@@ -89,18 +88,12 @@ def main():
     parser.add_argument('-plot_scores', default = False,
                         action="store_true",
                         help="Should we perform label smoothing?")
-    parser.add_argument('-threshold', default = 'FPR',
-                        choices=['CS', 'J', 'FPR'],
-                        help="Which threshold-moving strategy should we choose?")
     parser.add_argument('-simplified', action='store_true',
                         help="Should we consider a simplified base model")
     parser.add_argument('-ensemble', default = None,
                         choices=['StackedEnsemble', "SelfPaced"],
                         help="Which ensembling strategy should we apply?")
     parser.add_argument('-n_iter', default = 50, type = int)
-    parser.add_argument('-self_supervised', default = False,
-                        action="store_true",
-                        help="Should we use the self supervised representation?")
 
     opt = parser.parse_args()
 

@@ -9,7 +9,6 @@ from skopt import BayesSearchCV
 import optuna
 import matplotlib.pyplot as plt
 from functools import partial
-import thresholds
 import pickle as pkl
 
 import sys
